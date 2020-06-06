@@ -121,6 +121,7 @@ out[, (factor_vars) := lapply(.SD, factor), .SDcols = factor_vars]
 
 
 ## Label: Use jstable::mk.lev 
+library(jstable)
 out.label <- mk.lev(out)
 
 ## Label 0, 1 인건 No, Yes 로 바꿈
