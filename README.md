@@ -1,2 +1,2 @@
 # sarcoma-smc
-Sarcoma study with SMC transplantation
+Sarcoma study: 삼성서울병원 이식외과
