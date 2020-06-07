@@ -173,6 +173,11 @@ out$HospitalDay <- as.numeric(c[["재원일수(days)"]])
 
 out$RTgray <- c[["RT dose\r\n(Gy)"]]
 
+for (vname in names(c)[c(130:137, 139:141)]){
+  vn.new <- gsub(" ", ".", strsplit(vname, "\r")[[1]][1])
+  out[[vn.new]] <- as.integer(c[[vname]])
+}
+
 
 
 ## Variable list: For select UI in ShinyApps
@@ -180,7 +185,7 @@ varlist <- list(
   Base = c("Group", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
            "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop", "RTgray",
            "FNCLCC", "Resection", grep("Resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL"),
-  Complication = c("ClavienDindoComplication", "ClavienDindoGrade", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay"),
+  Complication = c("ClavienDindoComplication", "ClavienDindoGrade", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", names(out)[50:ncol(out)]),
   Event = c("Death", "recur_local"),
   Day = c("day_FU", "recur_day")
 )
