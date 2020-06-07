@@ -1,0 +1,315 @@
+---
+title: "SarcomaPreOpRTx"
+author: "Heejoo"
+date: '2020 6 7 '
+output:
+  html_document: 
+    dev: jpeg
+    df_print: paged
+    fig_height: 6
+    fig_width: 10
+    highlight: textmate
+    theme: cosmo
+    toc: yes
+    toc_float:
+      collapsed: no
+  word_document:
+    toc: yes
+    toc_depth: '3'
+  bookdown::word_document2:
+    fig_caption: yes
+editor_options:
+  chunk_output_type: console
+always_allow_html: yes
+---
+
+<style>
+   p {line-height: 2.5em;}
+   pre, code {white-space:pre !important; overflow-x:scroll !important}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, message = F, warning = F)
+```
+
+## Load & Input
+
+> ##와 글자 사이에 공백이 있어야 함. 
+
+> pre, code {white-space:pre !important; overflow-x:scroll !important} 는 좁은 화면에서 볼때 줄바꿈 없이 스크롤로 보는 기능.
+
+**읽을 때부터 `UK` 를 결측치로 : `na = "UK"` 옵션**
+
+```{r}
+library(readxl)
+library(dplyr)
+
+#read data
+
+#setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_RT")
+
+## 읽을 때부터 UK를 결측치로 
+a <- excel_sheets("sarcoma data sheet SMC 20200604.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200604.xlsx",sheet=x, skip=2, na = c("UK"))})
+b <- a[[1]] %>% 
+  left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
+  left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호")
+
+#Age 계산
+b$Age <- as.numeric(b[["수술날짜\r\n\r\ndd-mm-yyyy"]] - b[["생년월일\r\n\r\ndd-mm-yyyy"]])/365.25
+```
+
+## Methods
+
+관심 n수 274가 아니고 276명
+
+```{r}
+c <- b %>% 
+  filter(`Primary 수술여부\r\n\r\n0. Primary tumor\r\n1. Residual after incomplete resection\r\n2. Local recurrence.x`== 0)
+
+out <- c %>% select(환자번호,Age,`성별\r\n\r\nM/F`)
+names(out)[3] <- "Sex"; names(out)[1] <- "ID"
+out$Sex <- as.factor(out$Sex)
+```
+
+Group1 16명 뿐인데 너무 작은 것은 아닌지?
+
+* **분석 할 수는 있음. 다른 거랑 합칠지 여부는 분석결과 보고 결정하면 될듯!**
+
+* **가급적이면 T/F 대신 0/1**
+
+```{r}
+#preOpRTx : 시행(1|5)=TRUE, 시행x(4)=FALSE, 그외=NA
+out$preOpRTx <- ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% c("1", "5"), T,
+                       ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] == "4", F, NA))
+
+out$preOpRTx <- as.integer(out$preOpRTx)
+
+#TE : 삽입(1)=TRUE, 삽입x(0)=FALSE
+out$TE <- ifelse(c[["Tisuue expander insertion \r\n유뮤\r\n\r\n0. No\r\n1. Yes"]] == "1", T,
+                 ifelse(c[["Tisuue expander insertion \r\n유뮤\r\n\r\n0. No\r\n1. Yes"]]== "0", F, NA))
+
+out$TE <- as.integer(out$TE)
+
+#Group
+#"1" : preOP RTx 시행o
+#"2" : preOP PTx 시행x, TE 삽입 x
+#"3" : preOP RTx 시행x, TE 삽입 o
+#"UK" : 위 셋에 속하지 않는 환자
+#out$Group <- as.factor(ifelse(out$preOpRTx, "1" , ifelse(!out$preOpRTx & out$TE == F, "2", ifelse(!out$preOpRTx & out$TE == T,"3","UK"))))
+out$Group <- as.factor(ifelse(out$preOpRTx, "1" , ifelse(out$TE == F, "2", "3")))
+
+
+out
+```
+
+## Outcomes
+
+perioperative outcomes에서 post OP 30days 이내 complication 정보 알 수 있나요?
+
+* **기간 정보가 없는듯? 교수님께 물어볼께**
+
+나머지 perioperative, RT outcomes 관련 변수들은 뒤에 result에서 다루었음.
+
+long term outcomes -> 불가능할듯.. 이라고 적혀있는데 일단은 death 변수만 만듦.
+
+recurrence free survival은 따로 만들지 않았음.
+
+* **Death랑 recur 는 biopsy 연구와 동일하게 하면 됨.**
+
+* **Long term outcome 은 발생할 때 까지의 시간 도 있어야 함. 생존분석의 기본.**
+
+
+```{r}
+#Long term outcomes
+#Death : Alive(0) : FALSE, 사망(1) : TRUE, UK(2) : NA에 포함
+out$Death <- ifelse(c[["사망여부\r\n\r\n0.Alive\r\n1.Dead\r\n2.Unknown.y"]] == "1", 1, ifelse(c[["사망여부\r\n\r\n0.Alive\r\n1.Dead\r\n2.Unknown.y"]]== "0", 0, NA))
+## 관찰기간
+out$day_FU <- as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날짜\r\n\r\ndd-mm-yyyy"]])
+
+out$recur_local <- c[["재발#1\r\n\r\n0: 무\r\n1: 유.x"]]
+out$recur_site <- c$`Site of local recurrence`
+out$recur_site <- ifelse(out$recur_site == "6", NA, out$recur_site)
+out$recur_day <- ifelse(c[["재발#1\r\n\r\n0: 무\r\n1: 유.x"]] == 1, 
+                        as.numeric(as.Date(as.integer(c[["Date of local recurrence"]]), origin = "1899-12-30") - as.Date(c[["수술날짜\r\n\r\ndd-mm-yyyy"]])),
+                        as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날짜\r\n\r\ndd-mm-yyyy"]]))
+```
+
+## Results
+
+### Table1 : Patients and operation characteristics
+
+입력 정보가 NA일때는 무조건 NA처리되는지, 첫번째 if에서 안걸리면 else로 잡힐 수 있는지 궁금합니당!
+
+* **해보니까 `==`, `>` 같은 건 NA로, `%in%` 은 FALSE 로 나옴**
+
+저는 예상밖의 입력값 들어오면 NA처리하려고 웬만하면 따로 ifelse 걸어주었습니다.
+
+Prev abdominal Op : "무"가 275, NA가 1
+
+* **T/F 형태 말고 0, 1 형태가 더 일반적임. **
+
+```{r}
+#BMI
+height <- as.numeric(c[["키\r\n(cm)"]])/100
+weight <- as.numeric(c[["몸무게\r\n(kg)"]])
+out$BMI <- weight/height/height
+out$BMI_cat <- ifelse(out$BMI < 18.5, "underweight", ifelse(out$BMI < 25, "normal", ifelse(out$BMI < 30, "overweight", "obese")))
+out$BMI_cat <- as.factor(out$BMI)
+
+#DM : 1=TRUE, 0=FALSE
+out$DM <- as.integer(c[["DM\r\n\r\n0. No\r\n1.yes"]])
+
+#HTN : 1=TRUE, 0=FALSE
+out$HTN <- as.integer(c[["HTN\r\n\r\n0. No\r\n1.yes"]])
+
+#COPD : 1=TRUE, 0=FALSE
+out$COPD <- as.integer(c[["COPD\r\n\r\n0. No\r\n1.yes"]])
+
+#Coronary artery disease : 1=TRUE, 0=FALSE
+out$CoronaryArteryDisease <- as.integer(c[["Coronary artery disease\r\n\r\n0. No\r\n1.yes"]])
+
+#Chronic renal disease : 1=TRUE, 0=FALSE
+out$ChronicRenalDisease <- as.integer(c[["Chronic renal disease\r\n\r\n0. No\r\n1.yes"]])
+
+
+#Prev abdominal OP Hx : 0="무", 1="유", 2="기타(laparo)"
+out$PrevAbdominalOp <- c[["이전\r\nabdominal op Hx \r\n여부\r\n\r\n0. 무\r\n1. 유\r\n2. 기타(laparo)"]]
+#out$PrevAbdominalOp <- as.factor(out$PrevAbdominalOp)
+
+#PreOP chemo : 1=TRUE, 0=FALSE
+out$preOpChemo <- as.integer(c[["Neoadjuvant chemo 여부\r\n\r\n0.No\r\n1.Yes"]])
+```
+
+Hb,Albumin,PLT,PT에서 below~, over~ 이런 변수들이 필요할지?
+
+그냥 numeric 변수들로만 해놓으면 나중에 분석 할 때 바로 가능한지요?
+
+* **미리 만들어 놓는게 좋음**
+
+PLT below100 단 1명, below50 none
+
+PT over1.5 단 3명
+```{r}
+#Hb
+out$Hb <- as.numeric(c[["수술전 \r\n피검사\r\n\r\nHb\r\n(g/dL)"]])
+out$Hb_below9 <- as.integer(out$Hb < 9)  
+out$Hb_below10 <- as.integer(out$Hb < 10)
+  
+
+#Albumin
+out$Albumin <- as.numeric(c[["수술전 피검사\r\n\r\nAlbumin\r\n(g/dL)"]])
+out$Albumin_below3 <- as.integer(out$Albumin < 3)
+
+#PLT
+out$PLT <- as.numeric(c[["수술전 피검사\r\n\r\nPlatelet\r\n(1000/uL)"]])
+out$PLT_below50 <- as.integer(out$PLT < 50)
+out$PLT_below100 <- as.integer(out$PLT < 100)
+
+#PT INR
+out$PT_INR <- as.numeric(c[["수술전 피검사\r\n\r\nPT(INR)"]])
+out$PT_INR_over1.5 <- as.integer(out$PT_INR > 1.5)
+
+#Tumor size
+out$TumorSize <- as.numeric(c[["종양크기\r\nFirst dimension\r\n(mm)"]])
+```
+
+LPS, nonLPS subtype 중에 저렇게 분류하면 맞을지요?
+
+* **이교원 교수님 알려주신대로 하면 0, 1, 2는 포함, 7은 코멘트에 liposarcoma 있으면 포함임. `Liposarcoma_postop` 로 수정했음.**
+
+```{r}
+#Tumor histologic subtype
+#LPS : 0. WD Liposarcoma / 1. DD Liposarcoma / 2. Pleomorphic Liposarcoma / 7. 중 comment 에 liposarcoma
+#nonLPS : 3. Leiomyosarcoma / 4. MPNST / 5. Solitary fibrous tumor / 6. PEComa / 7. 중 comment 에 liposarcoma 없음.
+out$Liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other.y"]] %in% c(0, 1, 2)) |
+                          (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other.y"]] == 7) &
+                             grepl("liposarcoma|Liposarcoma", c[["Other \r\n\r\ncomment"]]))  
+
+#FNCLCC grade
+out$FNCLCC <- as.factor(c[["FNCLCC grade\r\n\r\n1. total score 2-3\r\n2. total score 4-5\r\n3. total score 6,7,8"]])
+
+#Tumor Resection
+#R0/R1="0", R2="1", other=NA ("2"도 NA에 포함)
+out$Resection <- c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2\r\n2. Not available"]]
+out$Resection <- as.factor(ifelse(out$Resection=="2", NA, out$Resection))
+
+#Combined Organ Resection
+# "colon resection" : Rt. + Lt. + rectum 
+# "small bowel resection" : small bowel + duodenum
+# "pancreas resection" : distal pan + PD 
+# "liver resection" 
+# "major vessel resection" : iliac a & v, IVC, aorta
+out$Resection_Colon <- (c[["동반절제 장기\r\nRight colon\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nLeft colon\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nRectum\r\n\r\n0. No\r\n1. Yes"]] == "1") %>% 
+  as.integer
+
+out$Resection_SmallBowel <- (c[["동반절제 장기\r\nSmall bowel\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nDuodenum\r\n\r\n0. No\r\n1. Yes"]] == "1") %>% as.integer
+
+out$Resection_Pancreas <- (c[["동반절제 \r\n장기\r\nDistal pancreas\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 \r\n장기\r\nPanreatico-duodenectomy\r\n\r\n0. No\r\n1. Yes"]] == "1") %>% as.integer
+out$Resection_Liver <- (c[["동반절제 장기\r\nLiver\r\n\r\n0. No\r\n1. Yes"]]=="1")
+out$Resection_MajorVesselResection<-(c[["동반절제 장기\r\nIliac vein\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIVC\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIliac artery\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nAorta\r\n\r\n0. No\r\n1. Yes"]] == "1") %>% as.integer
+
+#OP time
+out$opTime <- as.numeric(c[["수술시간\r\n(min)"]])
+
+#intra OP transfusion
+out$intraOpTransfusion <- as.integer(c[["PRBC 수혈 수"]])
+
+#Estimated blood loss
+out$EBL <- as.numeric(c[["EBL\r\n(ml)"]])
+
+out
+```
+
+### Table2 : Complication outcomes including mortality
+
+Clavien dindo grade 4a랑 4b 합쳐서 4로 해야할까요?
+
+- **4a, 4b 없고 4만 있는거 같은데?**
+
+complication 각각의 변수는 안 만들었는데, 만들어야할지요?
+- **일단 30일 내 합병증 정의가 문제, 교수님께 질문할 것임**
+
+Return to OR이 Sheet4 T열의 합병증으로 인한 Re-Op 의미하는 것 맞는지!
+- **맞을듯? 일단 ㄱ**
+
+Hospital Day는 hospital stay after OP로 받아들여서 아래식처럼 하면 맞는지!
+- **수술 후 재원일수를 의미하고, "재원일수(days)" 변수로 있음. 그런데 N수가 너무 적네.**
+
+
+```{r}
+#Clavien Dindo grade
+#complication이 TRUE여야 grade가 2~5 생기는데 grade가 0인 경우는 사실 complication false에 해당
+
+out$ClavienDindoComplication <- as.integer(c[["Clavien-Dindo complication \r\n\r\n0. No\r\n1. Yes"]])
+out$ClavienDindoGrade <- c[["Clavien-Dindo grade \r\n\r\n2/3a/3b/4a/4b/5"]]
+out$ClavienDindoGrade <- as.factor(ifelse(out$ClavienDindoGrade== "0" , NA, out$ClavienDindoGrade))
+
+#post OP transfusion
+out$postOpTransfusion <- as.integer(c[["수술 후 PRBC 수혈 여부\r\n\r\n0. No\r\n1. Yes"]])
+
+#ICU care
+out$ICUcare <- as.integer(c[["ICU 입실여부\r\n\r\n0. No\r\n1. Yes"]])
+
+#Return to OR
+out$ReOP <- as.integer(c[["합병증으로 인한 Re-op 여부\r\n\r\n0. No\r\n1. Yes"]])
+
+#Hospital Stay after OP
+out$HospitalDay <- as.numeric(c[["재원일수(days)"]])
+
+out
+```
+
+### Table3 : Radiation gray among groups
+```{r}
+#RTx gray
+out$RTgray <- c[["RT dose\r\n(Gy)"]]
+
+out
+```
+
+### Table4 : M+M risk factor analysis
+
+### Table5 : R2 resection risk factor analysis
+
+추가 변수 필요하지 않음
