@@ -50,6 +50,16 @@ ui <- navbarPage("PreOP RTx",
                           )
                           
                  ),
+                 tabPanel("Logistic regression",
+                          sidebarLayout(
+                            sidebarPanel(
+                              regressModuleUI("logistic")
+                            ),
+                            mainPanel(
+                              withLoader(DTOutput("logistictable"), type="html", loader="loader6")
+                            )
+                          )
+                 ),
                  tabPanel("Kaplan-meier plot",
                           sidebarPanel(
                             kaplanUI("kaplan")
@@ -195,7 +205,7 @@ server <- function(input, output, session) {
   data.info <- reactive({
     out1 <- out[, .SD]
     out1[, (conti_vars) := lapply(.SD, function(x){as.numeric(as.vector(x))}), .SDcols = conti_vars]
-   
+    
     out.label1 <- out.label[, .SD]
     #out.label[, var_label := ref[out.label$variable, name.old]]
     
@@ -306,7 +316,7 @@ server <- function(input, output, session) {
     )
   })
   
-
+  
   
   out_tb1 <- callModule(tb1module2, "tb1", data = data, data_label = data.label, data_varStruct = reactive(varlist), nfactor.limit = nfactor.limit, showAllLevels = T)
   
@@ -326,7 +336,19 @@ server <- function(input, output, session) {
     return(out.tb1)
   })
   
-
+  out_logistic <- callModule(logisticModule2, "logistic", data = data, data_label = data.label, data_varStruct = reactive(varlist), nfactor.limit = nfactor.limit)
+  
+  output$logistictable <- renderDT({
+    hide = which(colnames(out_logistic()$table) == "sig")
+    datatable(out_logistic()$table, rownames=T, extensions= "Buttons", caption = out_logistic()$caption,
+              options = c(opt.tbreg(out_logistic()$caption),
+                          list(columnDefs = list(list(visible=FALSE, targets =hide))
+                          ),
+                          list(scrollX = TRUE)
+              )
+    ) %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
+  })
+  
   
   
   out_kaplan <- callModule(kaplanModule, "kaplan", data = data, data_label = data.label, data_varStruct = reactive(varlist), nfactor.limit = nfactor.limit)
@@ -346,7 +368,7 @@ server <- function(input, output, session) {
               )
     )  %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
   })
-
+  
   
 }
 
