@@ -4,8 +4,8 @@ library(dplyr)
 #read data
 
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_DP")
-a <- excel_sheets("sarcoma data sheet SMC 20200629_DP추가.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200629_DP추가.xlsx",sheet=x,skip=2, na = "UK")})
+a <- excel_sheets("sarcoma data sheet SMC 20200629_DP추가(abutment 없으면 제외).xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200629_DP추가(abutment 없으면 제외).xlsx",sheet=x,skip=2, na = "UK")})
 b <- a[[1]] %>% 
   left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
   left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호")
@@ -15,7 +15,7 @@ b$Age <- as.numeric(b[["수술날짜\r\n\r\ndd-mm-yyyy"]] - b[["생년월일\r\n
 
 #연구대상 추리기
 c <- b %>% 
-  filter(`1:DP    2:Non-DP 9:제외`== 1 | `1:DP    2:Non-DP 9:제외`== 2)
+  filter(`abutment 없으면 뺌1:DP    2:Non-DP 9:제외`== 1 | `abutment 없으면 뺌1:DP    2:Non-DP 9:제외`== 2)
 
 #out에 데이터 만들기 시작
 out <- c %>% select(환자번호,Age,`성별\r\n\r\nM/F`)
@@ -23,7 +23,7 @@ names(out)[3] <- "Sex"; names(out)[1] <- "ID"
 out$Sex <- as.factor(out$Sex)
 
 #Distal Pancreatectomy : 1=DP, 2=non-DP
-out$DP<-as.integer(c[["1:DP    2:Non-DP 9:제외"]])
+out$DP<-as.integer(c[["abutment 없으면 뺌1:DP    2:Non-DP 9:제외"]])
 
 
 #Death
@@ -137,8 +137,8 @@ out$intraOpTransfusion <- as.integer(c[["PRBC 수혈 수"]])
 out$EBL <- as.numeric(c[["EBL\r\n(ml)"]])
 
 #C-D complication : complication==1 중에서 grade==2 는 complication=0으로 바꿈
-out$ClavienDindoComplication <- as.integer(c[["Clavien-Dindo complication \r\n\r\n0. No\r\n1. Yes"]])
-out$ClavienDindoComplication<-ifelse(out$ClavienDindoComplication==1 & c[["Clavien-Dindo grade \r\n\r\n2/3a/3b/4a/4b/5"]]=="2",0,out$ClavienDindoComplication)
+out$ClavienDindoComplication01 <- as.integer(c[["Clavien-Dindo complication \r\n\r\n0. No\r\n1. Yes"]])
+out$ClavienDindoComplication <-ifelse(out$ClavienDindoComplication01 == 1 & c[["Clavien-Dindo grade \r\n\r\n2/3a/3b/4a/4b/5"]]=="2",0,out$ClavienDindoComplication01)
 
 #post OP transfusion
 out$postOpTransfusion <- as.integer(c[["수술 후 PRBC 수혈 여부\r\n\r\n0. No\r\n1. Yes"]])
@@ -163,14 +163,15 @@ for (vname in names(c)[c(128:135, 137:139)]){
 
 #Primay tumor
 out$primaryTumor <- ifelse(c[["Primary 수술여부\r\n\r\n0. Primary tumor\r\n1. Residual after incomplete resection\r\n2. Local recurrence.x"]] == 0, 1, 0)
+out$DDLPS_postop <- as.integer(c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] == 1)
 
 
 ## Variable list: For select UI in ShinyApps
 varlist <- list(
-  Base = c("DP", "primaryTumor", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
+  Base = c("DP", "primaryTumor", "DDLPS_postop", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
            "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop", "RTgray",
            "FNCLCC", "Resection", grep("Resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL"),
-  Complication = c("ClavienDindoComplication", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray", "Abdominal.abscess", "Bowel.anastomosis.leak",
+  Complication = c("ClavienDindoComplication01", "ClavienDindoComplication", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray", "Abdominal.abscess", "Bowel.anastomosis.leak",
                    "Biliary.leak", "Bleeding", "Evisceration", "DVT", "Lymphatic.leak", "Pancreatic.leak", "Sepsis", "Urinary.leak", "Ileus"),
   Event = c("Death", "recur_local"),
   Day = c("day_FU", "recur_day")
@@ -185,7 +186,7 @@ factor_vars <- c(names(out)[sapply(out, function(x){length(table(x))}) <= 5])
 out[, (factor_vars) := lapply(.SD, factor), .SDcols = factor_vars]
 conti_vars <- setdiff(names(out), factor_vars)
 
- ## Label: Use jstable::mk.lev 
+## Label: Use jstable::mk.lev 
 library(jstable)
 out.label <- mk.lev(out)
 # 
@@ -199,4 +200,7 @@ for (v in vars.01){
 # ## Label: Specific
 out.label[variable == "DP", `:=`(var_label = "Distal Pancreatectomy", val_label = c("DP", "Non-DP"))]
 out.label[variable == "ClavienDindoComplication", `:=`(var_label = "Clavien-Dindo complication", val_label = c("1/2", "3a/3b/4/5"))]
+out.label[variable == "ClavienDindoComplication01", `:=`(var_label = "Clavien-Dindo complication (No/Yes)", val_label = c("No", "Yes"))]
+
+
 
