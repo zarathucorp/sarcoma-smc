@@ -5,12 +5,63 @@ source("global.R")              ## Load global.R
 library(shinycustomloader)      ## Loading image
 library(DT)                     ## datatable 
 library(jsmodule) ## my package: include xxxUI, xxxmodule, xxxModule
+library(jskm);library(survival)
 
 ## 범주 21 이상인 변수는 아예 빼버림
 nfactor.limit <- 21
 
 
-
+Makekaplan <- function(event.original = "TLF", day.original = "TLFDay", var.group = "SBintervention", data = out, data.label = out.label, yr.event = c(1, 5), cut.yr = F,  timeby = 365, xlims = c(0, 5 * 365), ylims = c(0 ,0.5)){
+  var.event <- event.original
+  var.day <- day.original
+  form <- as.formula(paste("Surv(", var.day, ",", var.event, ") ~ ", var.group, sep = ""))
+  if ("survey.design" %in% class(data)){
+    if (cut.yr == T){
+      data <- subset(data, !(get(var.day) < 365 * yr.event[1]))
+      data$variables[[var.event]] <- ifelse(data$variables[[var.day]] >= 365 * yr.event[2] & data$variables[[var.event]] == "1", 0,  as.numeric(as.vector(data$variables[[var.event]])))
+      data$variables[[var.day]]  <- ifelse(data$variables[[var.day]] >= 365 * yr.event[2], 365 * yr.event[2], data$variables[[var.day]])
+      #data$variables[[var.event]] <- ifelse(data$variables[[var.day]] < 365 * yr.event[1] & data$variables[[var.event]] == "1", 0,  as.numeric(as.vector(data$variables[[var.event]])))
+      #data$variables[[var.day]]  <- ifelse(data$variables[[var.day]] < 365 * yr.event[1], 365 * yr.event[1] - 1, data$variables[[var.day]])
+      
+    }
+    
+    data$variables[[var.day]] <- as.numeric(as.vector(data$variables[[var.day]]))
+    data$variables[[var.event]] <- as.numeric(as.vector(data$variables[[var.event]]))
+    #data$variables[[var.day]] <- data$variables[[var.day]]
+    res.kap <- survey::svykm(form, design = data)  
+    p <- svyjskm(res.kap, xlabs = "Days", ylab = "Cumulative Incidence", cumhaz = T, xlims = xlims, ylims = ylims, timeby = timeby,
+                 pval.coord = c(365 * (yr.event[1] + 1), 0.01), legendposition = c(0.3, 0.8),
+                 ystrataname = data.label[var.event, var_label][1], ystratalabs = data.label[variable == var.group][level %in% levels(data$variables[[var.group]]), val_label],
+                 surv.scale = "percent", mark = F, pval = T, table = T, design = data, pval.testname = F)
+  } else{
+    if (cut.yr == T){
+      data <- data[!(get(var.day) < 365 * yr.event[1])]
+      data[[var.event]] <- ifelse(data[[var.day]] >= 365 * yr.event[2] & data[[var.event]] == "1", 0,  as.numeric(as.vector(data[[var.event]])))
+      data[[var.day]] <- ifelse(data[[var.day]] >= 365 * yr.event[2], 365 * yr.event[2], data[[var.day]])
+      
+      #data[[var.event]] <- ifelse(data[[var.day]] < 365 * yr.event[1] & data[[var.event]] == "1", 0,  as.numeric(as.vector(data[[var.event]])))
+      #data[[var.day]] <- ifelse(data[[var.day]] < 365 * yr.event[1], 365 * yr.event[1] - 1, data[[var.day]])
+      
+      
+    }
+    data[[var.day]] <- as.numeric(as.vector(data[[var.day]]))
+    data[[var.event]] <- as.numeric(as.vector(data[[var.event]]))
+    #data[[var.day]] <- data[[var.day]]
+    
+    res.kap <- survfit(form, data = data)
+    res.kap$call$formula <- form
+    p <- jskm(res.kap, xlabs = "Days", ylab = "Cumulative Incidence", cumhaz = T, xlims, ylims = ylims, 
+              ystrataname = data.label[variable == var.event, var_label][1], ystratalabs = data.label[variable == var.group][level %in% levels(data[[var.group]]), val_label],
+              pval.coord = c(365 * (yr.event[1] + 1), 0.01), legendposition = c(0.3, 0.8), timeby = timeby,
+              surv.scale = "percent", mark = F, pval = T, table = T, data = data)
+  }
+  
+  
+  return(p)
+  
+  
+  
+}
 
 ui <- navbarPage("PreOP biopsy",
                  tabPanel("Data", icon = icon("table"),
@@ -34,6 +85,18 @@ ui <- navbarPage("PreOP biopsy",
                             )
                           )
                  ),
+                 tabPanel("Liposarcoma accuracy",
+                          sidebarLayout(
+                            sidebarPanel(
+                              selectInput("test_acc", "Test", c("RPS_preop", "liposarcoma_preop"), "RPS_preop"),
+                              selectInput("disease_acc", "Outcome", c("RPS_postop", "liposarcoma_postop"), "RPS_postop")
+                            ),
+                            mainPanel(
+                              withLoader(verbatimTextOutput("accuracyresult"), type="html", loader="loader6"),
+                              withLoader(DTOutput("acc_ttest"), type="html", loader="loader6")
+                            )
+                          )),
+                 
                  tabPanel("Table 1", icon = icon("percentage"),
                           sidebarLayout(
                             sidebarPanel(
@@ -52,35 +115,39 @@ ui <- navbarPage("PreOP biopsy",
                  ),
                  tabPanel("Kaplan-meier plot",
                           sidebarPanel(
-                            kaplanUI("kaplan")
+                            radioButtons("data_kap", "Subset", c("All", "LPS", "DDLPS"), "All", inline = T),
+                            radioButtons("event_kap", "Outcome", choices = varlist[names(varlist)[2]][[1]][1:2], selected = varlist$Event[1], inline =T),
+                            sliderInput("year_kap", "Cut month",  min = 0 , max = 120, value = c(0, 24)),
+                            selectInput("group_kap", "Group", varlist[names(varlist)[1]], selected = "biopsy_preop_primary", multiple = F),
+                            uiOutput("cutconti"),
+                            sliderInput("ylims_kap", "Y axis ranges", min = 0, max = 1, value = c(0, 0.6), step = 0.05)
                           ),
                           mainPanel(
-                            optionUI("kaplan"),
                             withLoader(plotOutput("kaplan_plot"), type="html", loader="loader6"),
-                            ggplotdownUI("kaplan")
+                            h3("Download options"),
+                            wellPanel(
+                              uiOutput("downloadControls_kap"),
+                              downloadButton("downloadButton_kap", label = "Download the plot")
+                            )
                           )
                           
                  ),
                  tabPanel("Cox model",
                           sidebarLayout(
                             sidebarPanel(
-                              coxUI("cox")
+                              radioButtons("data_cox", "Subset", c("All", "LPS", "DDLPS"), "All", inline = T),
+                              selectInput("dep_cox", "Outcome", choices = varlist[names(varlist)[2]][[1]][1:2], selected = varlist$Event[1]),
+                              sliderInput("year_cox", "Cut month", min = 0 , max = 120, value = c(0, 24)),
+                              selectInput("cov_cox", "Covariates", choices = varlist$Base, selected = c("biopsy_preop_primary", "Age", "Sex", "tumor_size", "meta_lung_liver_abd_bm",
+                                                                                                        "multifocal", "num_resected_organ", "resection_margin", "LPS", "FNCLCC_grade",
+                                                                                                        "Neoadjuvant", "Rtx_tissue_expander", "Rtx_preop", "Chemo_preop"), multiple = T),
+                              checkboxInput("step_cox", "Backward stepwise selection", value = F)
                             ),
                             mainPanel(
                               withLoader(DTOutput("coxtable"), type="html", loader="loader6")
                             )
                           )
                           
-                 ),
-                 tabPanel("Logistic regression",
-                          sidebarLayout(
-                            sidebarPanel(
-                              regressModuleUI("logistic")
-                            ),
-                            mainPanel(
-                              withLoader(DTOutput("logistictable"), type="html", loader="loader6")
-                            )
-                          )
                  )
                  
 )
@@ -205,7 +272,7 @@ server <- function(input, output, session) {
   data.info <- reactive({
     out1 <- out[, .SD]
     out1[, (conti_vars) := lapply(.SD, function(x){as.numeric(as.vector(x))}), .SDcols = conti_vars]
-    
+   
     out.label1 <- out.label[, .SD]
     #out.label[, var_label := ref[out.label$variable, name.old]]
     
@@ -316,7 +383,7 @@ server <- function(input, output, session) {
     )
   })
   
-  
+
   
   out_tb1 <- callModule(tb1module2, "tb1", data = data, data_label = data.label, data_varStruct = reactive(varlist), nfactor.limit = nfactor.limit, showAllLevels = T)
   
@@ -336,40 +403,190 @@ server <- function(input, output, session) {
     return(out.tb1)
   })
   
+
   
-  
-  
-  out_kaplan <- callModule(kaplanModule, "kaplan", data = data, data_label = data.label, data_varStruct = reactive(varlist), nfactor.limit = nfactor.limit)
-  
-  output$kaplan_plot <- renderPlot({
-    print(out_kaplan())
+  datakm <- reactive({
+    switch(input$data_kap, 
+           "All" = out,
+           "LPS" = out[liposarcoma_postop == 1], 
+           "DDLPS" = out[DDLPS_postop == 1])
   })
   
-  out_cox <- callModule(coxModule, "cox", data = data, data_label = data.label, data_varStruct = reactive(varlist), default.unires = T, nfactor.limit = nfactor.limit)
+  output$cutconti <- renderUI({
+    if (class(out[[input$group_kap]]) %in% c("integer", "numeric")){
+      data.km <- datakm()
+      var.event <- input$event_kap
+      var.day <- varlist$Day[varlist$Event == input$event_kap]
+      data.km[[var.event]] <- as.numeric(as.vector(data.km[[var.event]]))
+      mstat <- maxstat::maxstat.test(as.formula(paste("survival::Surv(",var.day,",", var.event,") ~ ", input$group_kap, sep="")), data= data.km, smethod="LogRank", pmethod="condMC", B=999)
+      cut5 <- mstat$cuts[order(-mstat$stats)][1:5]
+      
+      vec <- data.km[[input$group_kap]][!is.na(data.km[[input$group_kap]])]
+      numericInput("cut_conti", "Cut-off", value = cut5[1], min = quantile(vec, 0.05), max = quantile(vec, 0.95))
+    }
+  })
+  
+  
+  
+  obj.km <- reactive({
+    req(input$group_kap)
+    req(input$event_kap)
+    
+    data <- datakm()
+    label <- out.label
+    
+    
+    if (class(data[[input$group_kap]]) %in% c("numeric", "integer")){
+      req(input$cut_conti)
+      data$xcat <- factor(as.integer(data[[input$group_kap]] > input$cut_conti))
+      gvar <- "xcat"
+      addlabel <- mk.lev(data[, .SD, .SDcols = "xcat"])
+      addlabel[, var_label := paste(label[variable == input$group_kap, var_label][1], "group")]
+      addlabel[, val_label := paste(label[variable == input$group_kap, var_label][1], paste(c("\u2264", ">"), input$cut_conti, sep=""))]
+      label <- rbind(label, addlabel)
+      setkey(label, variable)
+    } else{
+      gvar <- input$group_kap
+    }
+    
+    Makekaplan(event.original = input$event_kap, day.original = varlist$Day[varlist$Event == input$event_kap],  var.group = gvar, data = data, data.label = label,
+               yr.event = input$year_kap/12, cut.yr = T, timeby = 60, xlims = input$year_kap/12 * 365, ylims = input$ylims_kap) 
+  })
+  
+  output$kaplan_plot <- renderPlot({
+    print(obj.km())
+  })
+  
+  output$downloadControls_kap <- renderUI({
+    fluidRow(
+      column(4,
+             selectizeInput("kap_file_ext", "File extension (dpi = 300)", 
+                            choices = c("jpg","pdf", "tiff", "svg", "emf"), multiple = F, 
+                            selected = "jpg"
+             )
+      ),
+      column(4,
+             sliderInput("fig_width_kap", "Width (in):",
+                         min = 5, max = 20, value = 8
+             )
+      ),
+      column(4,
+             sliderInput("fig_height_kap", "Height (in):",
+                         min = 5, max = 20, value = 6
+             )
+      )
+    )
+  })
+  
+  output$downloadButton_kap <- downloadHandler(
+    filename =  function() {
+      paste(input$event_kap, "_", input$data_kap, "_", input$group_kap , "_plot.", input$kap_file_ext ,sep="")
+    },
+    # content is a function with argument file. content writes the plot to the device
+    content = function(file) {
+      withProgress(message = 'Download in progress',
+                   detail = 'This may take a while...', value = 0, {
+                     for (i in 1:15) {
+                       incProgress(1/15)
+                       Sys.sleep(0.01)
+                     }
+                     
+                     if (input$kap_file_ext == "emf"){
+                       devEMF::emf(file, width = input$fig_width_kap, height =input$fig_height_kap, coordDPI = 300, emfPlus = F)
+                       plot(obj.km())
+                       dev.off()
+                       
+                     } else{
+                       ggsave(file, obj.km(), dpi = 300, units = "in", width = input$fig_width_kap, height =input$fig_height_kap)
+                     }
+                     
+                   })
+      
+      
+    })
+  
+ 
+  datacox <- reactive({
+    switch(input$data_cox, 
+           "All" = out,
+           "LPS" = out[liposarcoma_postop == 1], 
+           "DDLPS" = out[DDLPS_postop == 1])
+  })
   
   output$coxtable <- renderDT({
-    hide <- which(colnames(out_cox()$table) == c("sig"))
-    datatable(out_cox()$table, rownames=T, extensions= "Buttons", caption = out_cox()$caption,
-              options = c(opt.tbreg(out_cox()$caption),
+    validate(
+      need(!is.null(input$cov_cox), "Please select at least 1 independent variable.")
+    )
+    data <- datacox()
+    label <- out.label
+    
+    var.event <- input$dep_cox
+    var.day <- varlist$Day[varlist$Event == input$dep_cox]
+    
+    data <- data[!( get(var.day) < 365 * input$year_cox[1]/12)]
+    
+    data[[var.event]] <- ifelse(data[[var.day]] >= 365 * input$year_cox[2]/12 & data[[var.event]] == "1", 0,  as.numeric(as.vector(data[[var.event]])))
+    data[[var.day]] <- ifelse(data[[var.day]] >= 365 * input$year_cox[2]/12, 365 * input$year_cox[2]/12, data[[var.day]])
+    
+    #data[[var.event]] <- ifelse(data[[var.day]] < 365 * input$year_cox[1]/12 & data[[var.event]] == "1", 0,  as.numeric(as.vector(data[[var.event]])))
+    #data[[var.day]] <- ifelse(data[[var.day]] < 365 * input$year_cox[1]/12, 365 * input$year_cox[1]/12 - 1, data[[var.day]])
+    
+    
+    data[[var.event]] <- as.numeric(as.vector(data[[var.event]]))
+    data[[var.day]] <- as.numeric(as.vector(data[[var.day]]))
+    forms.cox <- as.formula(paste("Surv(", var.day,",", var.event,") ~ ", paste(input$cov_cox, collapse = "+"), sep=""))
+    
+    
+    cc <- substitute(survival::coxph(.form, data= data, model = T), list(.form= forms.cox))
+    res.cox <- eval(cc)
+    
+    if (input$step_cox == T){
+      data.cox.step <- data[complete.cases(data[, .SD, .SDcols = c(var.day, var.event, input$cov_cox)])]
+      cc.step <- substitute(survival::coxph(.form, data= data.cox.step, model = T), list(.form= forms.cox))
+      
+      res.cox <- stats::step(eval(cc.step), direction = "backward", scope = list(lower = ~1))
+    }
+    
+    
+    tb.cox <- jstable::cox2.display(res.cox, dec = 2)
+    tb.cox <- jstable::LabeljsCox(tb.cox, ref = label)
+    out.cox <- rbind(tb.cox$table, tb.cox$metric)
+    sig <- out.cox[, ncol(out.cox)]
+    sig <- gsub("< ", "", sig)
+    sig <- ifelse(as.numeric(as.vector(sig)) <= 0.05, "**", NA)
+    out.cox <- cbind(out.cox, sig)
+    
+    cap.cox <- paste("Cox's proportional hazard model on time ('", label[variable == var.day, var_label][1] , "') to event ('", label[variable == var.event, var_label][1], "')", sep="")
+    
+    hide <- which(colnames(out.cox) == c("sig"))
+    datatable(out.cox, rownames=T, extensions= "Buttons", caption = cap.cox,
+              options = c(opt.tbreg(cap.cox),
                           list(columnDefs = list(list(visible=FALSE, targets= hide))
                           )
               )
     )  %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
   })
   
-  out_logistic <- callModule(logisticModule2, "logistic", data = data, data_label = data.label, data_varStruct = reactive(varlist), nfactor.limit = nfactor.limit)
-  
-  output$logistictable <- renderDT({
-    hide = which(colnames(out_logistic()$table) == "sig")
-    datatable(out_logistic()$table, rownames=T, extensions= "Buttons", caption = out_logistic()$caption,
-              options = c(opt.tbreg(out_logistic()$caption),
-                          list(columnDefs = list(list(visible=FALSE, targets =hide))
-                          ),
-                          list(scrollX = TRUE)
+ 
+  output$acc_ttest <- renderDT({
+    out_tb <- CreateTableOneJS(vars= input$test_acc, strata = "Rtx_tissue_expander", data = out[get(input$disease_acc) == 1], Labels = T, labeldata = out.label)
+    hide <- which(colnames(out_tb$table) == c("test", "sig"))
+    datatable(out_tb$table, rownames=T, extensions= "Buttons", caption = out_tb$caption,
+              options = c(opt.tbreg( out_tb$caption),
+                          list(columnDefs = list(list(visible=FALSE, targets= hide))
+                          )
               )
-    ) %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
+    )  %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
   })
   
+  
+  
+  output$accuracyresult <- renderPrint({
+    tb <- data()[, table(get(input$test_acc), get(input$disease_acc))][2:1, 2:1]
+    epiR::epi.tests(tb)
+    
+  })
+
   
 }
 

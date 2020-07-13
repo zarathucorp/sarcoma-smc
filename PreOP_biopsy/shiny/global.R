@@ -2,11 +2,11 @@ library(readxl)  ## For xlsx read
 library(dplyr)   ## For %>% (ctrl + M 누르면 나옴)
 library(data.table)
 ## Set directory
-setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_biopsy")
+#setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_biopsy")
 
 ## Read all sheet
-a <- excel_sheets("sarcoma data sheet SMC 20200604.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200604.xlsx", sheet = x, skip = 2, na = c("UK", "ND"))})
+a <- excel_sheets("sarcoma data sheet SMC 20200709.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200709.xlsx", sheet = x, skip = 2, na = c("UK", "ND"))})
 
 
 ## Merge sheet 1-7, by 환자번호
@@ -20,8 +20,12 @@ b[["EBL\r\n(ml)"]] <- ifelse(b[["EBL\r\n(ml)"]] == "UK", NA, as.numeric(b[["EBL\
 ## Define Age
 b$Age <-  as.numeric(b[["수술날짜\r\n\r\ndd-mm-yyyy"]] - b[["생년월일\r\n\r\ndd-mm-yyyy"]])/365.25
 
+b$환자번호 <- as.integer(b$환자번호)
+
+
+### RPS 여부 파일 따로 csv로 바꿔 저장함. 
 ## 변수만들기 
-c <- b %>% filter(`Primary 수술여부\r\n\r\n0. Primary tumor\r\n1. Residual after incomplete resection\r\n2. Local recurrence.x` == "0" & `환자번호` != "21733889") %>% 
+c <- left_join(b, read.csv("preop Bx. RPS 여부 20200712.csv")) %>% filter(`Primary 수술여부\r\n\r\n0. Primary tumor\r\n1. Residual after incomplete resection\r\n2. Local recurrence.x` == "0" & `환자번호` != "21733889") %>% 
   filter(!(`수술 전 Biopsy\r\n\r\n0. None\r\n1. Primary site\r\n2. Local recurrence site\r\n3. Metastatic site` == 1 & `Type of needle\r\n\r\n0. Core\r\n1. FNA\r\n2. N/A\r\n3. Unknown` %in% 2:3)) %>% 
   mutate(biopsy_preop_primary = as.integer(`수술 전 Biopsy\r\n\r\n0. None\r\n1. Primary site\r\n2. Local recurrence site\r\n3. Metastatic site` == "1"),
          type_needle = `Type of needle\r\n\r\n0. Core\r\n1. FNA\r\n2. N/A\r\n3. Unknown`) %>% 
@@ -37,9 +41,13 @@ out[out$`환자번호` == 31050857, "Sex"] <- "F"
 
 ## PreOp biopsy
 out$liposarcoma_preop <- as.integer(c[["preOP Bx. 결과\r\n\r\n0. WD \r\n1. DD \r\n2. Pleomorphic \r\n3. LMS\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] %in% c("0", "1", "1or 2", "2"))
-out$liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other.y"]] %in% c(0, 1, 2)) |
-                          (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other.y"]] == 7) &
+out$liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] %in% c(0, 1, 2)) |
+                          (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] == 7) &
                              grepl("liposarcoma|Liposarcoma", c[["Other \r\n\r\ncomment"]]))  
+
+out$RPS_preop <- as.integer(c$preOP.Retroperitoneal.sarcoma..RPS.)
+out$RPS_postop <- as.integer(c$post.OP.retroperitoneal.sarcoma..RPS.)
+out$DDLPS_postop <- as.integer(c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] == 1)
 
 
 ## Death
@@ -61,7 +69,7 @@ out$Rtx_dose <- c[["RT dose\r\n(Gy)"]]
 
 
 cond1 <- c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% c("1", "5")
-cond2 <- (c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] == "4") & (c[["Tisuue expander insertion \r\n유뮤\r\n\r\n0. No\r\n1. Yes"]] == "1")
+cond2 <- (c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% "4") & (c[["Tisuue expander insertion \r\n유뮤\r\n\r\n0. No\r\n1. Yes"]] == "1")
 
 out$Rtx_tissue_expander <- as.integer(cond1 | cond2)
 
@@ -76,6 +84,7 @@ out$meta_liver <- c[["Liver metastasis\r\n\r\n0. No\r\n1. Yes"]]
 out$meta_liver <- ifelse(out$meta_liver == 3, NA, out$meta_liver)
 out$meta_bm <- c[["Bone metastasis\r\n\r\n0. No\r\n1. Yes"]]
 out$meta_abd <- c[["Intra-abdominal metastasis\r\n\r\n0. No\r\n1. Yes"]]
+out$meta_lung_liver_abd_bm <- as.integer(out$meta_lung | out$meta_liver | out$meta_bm | out$meta_abd)
 out$multifocal <- c[["Mutifocality 여부\r\n\r\n0. No\r\n1. Yes"]]
 
 
@@ -106,7 +115,7 @@ out$sarcomatosis_pattern <- as.integer(c[["Site of local recurrence"]] == "4")
 
 ## Variable list: For select UI in ShinyApps
 varlist <- list(
-  Base = c("biopsy_preop_primary", "Age", "Sex", "type_needle", "liposarcoma_preop", "liposarcoma_postop", "recur_site", names(out)[12:ncol(out)]),
+  Base = c("biopsy_preop_primary", "Age", "Sex", "type_needle", "liposarcoma_preop", "liposarcoma_postop", "RPS_preop", "RPS_postop", "DDLPS_postop", "recur_site", names(out)[16:33]),
   Event = c("death", "recur_local", "sarcomatosis_pattern"),
   Day = c("day_FU", "recur_day")
 )
@@ -118,8 +127,9 @@ out <- data.table(out[, -1])
 ## 범주형 변수: 범주 5 이하, recur_site
 factor_vars <- c(names(out)[sapply(out, function(x){length(table(x))}) <= 5], c( "recur_site"))
 out[, (factor_vars) := lapply(.SD, factor), .SDcols = factor_vars]
+conti_vars <- setdiff(names(out), factor_vars)
 
-
+out$RPS_postop <- factor(out$RPS_postop, levels = 0:1)
 ## Label: Use jstable::mk.lev 
 library(jstable)
 out.label <- mk.lev(out)
@@ -133,3 +143,5 @@ for (v in vars.01){
 
 ## Label: preop primay Biopsy
 out.label[variable == "biopsy_preop_primary", `:=`(var_label = "PreOP biopsy", val_label = c("No", "Yes"))]
+out.label[variable == "resection_margin", `:=`(var_label = "Resection", val_label = c("R0/R1", "R2"))]
+

@@ -4,8 +4,8 @@ library(dplyr)
 #read data
 
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_RT")
-a <- excel_sheets("sarcoma data sheet SMC 20200604.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200604.xlsx",sheet=x,skip=2, na = "UK")})
+a <- excel_sheets("sarcoma data sheet SMC 20200709.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200709.xlsx",sheet=x,skip=2, na = "UK")})
 b <- a[[1]] %>% 
   left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
   left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호")
@@ -14,16 +14,19 @@ b <- a[[1]] %>%
 b$Age <- as.numeric(b[["수술날짜\r\n\r\ndd-mm-yyyy"]] - b[["생년월일\r\n\r\ndd-mm-yyyy"]])/365.25
 
 
-c <- b %>% 
-  filter(`Primary 수술여부\r\n\r\n0. Primary tumor\r\n1. Residual after incomplete resection\r\n2. Local recurrence.x`== 0)
+#c <- b %>% 
+#  filter(`Primary 수술여부\r\n\r\n0. Primary tumor\r\n1. Residual after incomplete resection\r\n2. Local recurrence.x`== 0)
+
+c <- b
 
 out <- c %>% select(환자번호,Age,`성별\r\n\r\nM/F`)
 names(out)[3] <- "Sex"; names(out)[1] <- "ID"
 out$Sex <- as.factor(out$Sex)
 
+out$primaryTumor <- ifelse(c[["Primary 수술여부\r\n\r\n0. Primary tumor\r\n1. Residual after incomplete resection\r\n2. Local recurrence.x"]] == 0, 1, 0)
 
 out$preOpRTx <- ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% c("1", "5"), T,
-                       ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] == "4", F, NA))
+                       ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% "4", F, NA))
 
 
 #TE : 삽입(1)=TRUE, 삽입x(0)=FALSE
@@ -35,7 +38,7 @@ out$TE <- ifelse(c[["Tisuue expander insertion \r\n유뮤\r\n\r\n0. No\r\n1. Yes
 #"3" : preOP RTx 시행x, TE 삽입 o
 #"UK" : 위 셋에 속하지 않는 환자
 out$Group <- as.factor(ifelse(out$preOpRTx, "1" , ifelse(out$TE == F, "2", "3")))
-
+out$Group1_23 <- as.factor(ifelse(out$Group == 1, 1, 23))
 
 out$Death<-ifelse(c[["사망여부\r\n\r\n0.Alive\r\n1.Dead\r\n2.Unknown.y"]] == "1", T,
                   ifelse(c[["사망여부\r\n\r\n0.Alive\r\n1.Dead\r\n2.Unknown.y"]]== "0", F, NA)) %>% as.integer
@@ -109,8 +112,8 @@ out$TumorSize <- as.numeric(c[["종양크기\r\nFirst dimension\r\n(mm)"]])
 #Tumor histologic subtype
 #LPS : 0. WD Liposarcoma / 1. DD Liposarcoma / 2. Pleomorphic Liposarcoma / 7. 중 comment 에 liposarcoma
 #nonLPS : 3. Leiomyosarcoma / 4. MPNST / 5. Solitary fibrous tumor / 6. PEComa / 7. 중 comment 에 liposarcoma 없음.
-out$Liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other.y"]] %in% c(0, 1, 2)) |
-                                       (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other.y"]] == 7) &
+out$Liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] %in% c(0, 1, 2)) |
+                                       (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] == 7) &
                                        grepl("liposarcoma|Liposarcoma", c[["Other \r\n\r\ncomment"]]))  
 
 #FNCLCC grade
@@ -135,11 +138,16 @@ out$Resection_SmallBowel <- as.integer(
   (c[["동반절제 장기\r\nSmall bowel\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nDuodenum\r\n\r\n0. No\r\n1. Yes"]] == "1")
   )
 
+out$Resection_Colon_or_SmallBowel <- as.integer(out$Resection_Colon | out$Resection_SmallBowel)
+
 out$Resection_Pancreas <- as.integer(
   (c[["동반절제 \r\n장기\r\nDistal pancreas\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 \r\n장기\r\nPanreatico-duodenectomy\r\n\r\n0. No\r\n1. Yes"]] == "1")
   )
 
 out$Resection_Liver <- as.integer((c[["동반절제 장기\r\nLiver\r\n\r\n0. No\r\n1. Yes"]]=="1"))
+
+out$Resection_Pancreas_or_Liver <- as.integer(out$Resection_Pancreas | out$Resection_Liver)
+
 
 out$Resection_MajorVesselResection <- as.integer(
   (c[["동반절제 장기\r\nIliac vein\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIVC\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIliac artery\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nAorta\r\n\r\n0. No\r\n1. Yes"]] == "1")
@@ -182,10 +190,10 @@ for (vname in names(c)[c(130:137, 139:141)]){
 
 ## Variable list: For select UI in ShinyApps
 varlist <- list(
-  Base = c("Group", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
-           "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop", "RTgray",
+  Base = c("Group", "Group1_23", "primaryTumor", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
+           "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop",
            "FNCLCC", "Resection", grep("Resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL"),
-  Complication = c("ClavienDindoComplication", "ClavienDindoGrade", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", names(out)[50:ncol(out)]),
+  Complication = c("ClavienDindoComplication", "ClavienDindoGrade", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray"),
   Event = c("Death", "recur_local"),
   Day = c("day_FU", "recur_day")
 )
@@ -193,7 +201,7 @@ varlist <- list(
 
 library(data.table)
 ## Exclude 환자번호 :이제부터 data.table 패키지 사용
-out <- data.table(out[, unlist(varlist)])
+out <- data.table(out[!is.na(out$Group), unlist(varlist)])
 
 ## 범주형 변수: 범주 5 이하, recur_site
 factor_vars <- c(names(out)[sapply(out, function(x){length(table(x))}) <= 5])
@@ -212,6 +220,9 @@ for (v in vars.01){
 }
 
 ## Label: Specific
-out.label[variable == "Group", `:=`(var_label = "Group", val_label = c("PreOP RTx", "No RTx & No TE", "No RTx & TE"))]
+out.label[variable == "Group", `:=`(var_label = "Group", val_label = c("PreOP RTx", "RTx & No TE", "RTx & TE"))]
+out.label[variable == "Group1_23", `:=`(var_label = "Group", val_label = c("PreOP RTx", "RTx"))]
+out.label[variable == "primaryTumor", `:=`(var_label = "Primary tumor", val_label = c("No", "Yes"))]
+
 out.label[variable == "Resection", `:=`(var_label = "Resection", val_label = c("R0/R1", "R2"))]
 

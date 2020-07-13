@@ -4,8 +4,8 @@ library(dplyr)
 #read data
 
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_DP")
-a <- excel_sheets("sarcoma data sheet SMC 20200629_DP추가(abutment 없으면 제외).xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200629_DP추가(abutment 없으면 제외).xlsx",sheet=x,skip=2, na = "UK")})
+a <- excel_sheets("sarcoma data sheet SMC 20200713_DP추가(abutment 없으면 제외).xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200713_DP추가(abutment 없으면 제외).xlsx",sheet=x,skip=2, na = "UK")})
 b <- a[[1]] %>% 
   left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
   left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호")
@@ -66,6 +66,13 @@ out$ChronicRenalDisease <- as.integer(c[["Chronic renal disease\r\n\r\n0. No\r\n
 out$PrevAbdominalOp <- c[["이전\r\nabdominal op Hx \r\n여부\r\n\r\n0. 무\r\n1. 유\r\n2. 기타(laparo)"]]
 #out$PrevAbdominalOp <- as.factor(out$PrevAbdominalOp)
 
+
+## PreOP RTx
+
+out$preOpRTx <- ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% c("1", "5"), T,
+                       ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% "4", F, NA)) %>% 
+  as.integer()
+
 #PreOP chemo : 1=TRUE, 0=FALSE
 out$preOpChemo <- as.integer(c[["Neoadjuvant chemo 여부\r\n\r\n0.No\r\n1.Yes"]])
 
@@ -99,6 +106,8 @@ out$TumorSize <- as.numeric(c[["종양크기\r\nFirst dimension\r\n(mm)"]])
 out$Liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] %in% c(0, 1, 2)) |
                                        (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] == 7) &
                                        grepl("liposarcoma|Liposarcoma", c[["Other \r\n\r\ncomment"]]))  
+
+out$Histology <- as.integer(c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]])
 #FNCLCC grade
 out$FNCLCC <- as.factor(c[["FNCLCC grade\r\n\r\n1. total score 2-3\r\n2. total score 4-5\r\n3. total score 6,7,8"]])
 
@@ -168,8 +177,8 @@ out$DDLPS_postop <- as.integer(c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. D
 
 ## Variable list: For select UI in ShinyApps
 varlist <- list(
-  Base = c("DP", "primaryTumor", "DDLPS_postop", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
-           "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop", "RTgray",
+  Base = c("DP", "primaryTumor", "DDLPS_postop", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpRTx", "preOpChemo", 
+           "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop", "Histology",
            "FNCLCC", "Resection", grep("Resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL"),
   Complication = c("ClavienDindoComplication01", "ClavienDindoComplication", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray", "Abdominal.abscess", "Bowel.anastomosis.leak",
                    "Biliary.leak", "Bleeding", "Evisceration", "DVT", "Lymphatic.leak", "Pancreatic.leak", "Sepsis", "Urinary.leak", "Ileus"),
@@ -182,11 +191,12 @@ library(data.table)
 out <- data.table(out[, unlist(varlist)])
 
 ## 범주형 변수: 범주 5 이하, recur_site
-factor_vars <- c(names(out)[sapply(out, function(x){length(table(x))}) <= 5])
+factor_vars <- c(c(names(out)[sapply(out, function(x){length(table(x))}) <= 5]), "Histology")
 out[, (factor_vars) := lapply(.SD, factor), .SDcols = factor_vars]
 conti_vars <- setdiff(names(out), factor_vars)
 
-## Label: Use jstable::mk.lev 
+
+ ## Label: Use jstable::mk.lev 
 library(jstable)
 out.label <- mk.lev(out)
 # 
@@ -201,6 +211,8 @@ for (v in vars.01){
 out.label[variable == "DP", `:=`(var_label = "Distal Pancreatectomy", val_label = c("DP", "Non-DP"))]
 out.label[variable == "ClavienDindoComplication", `:=`(var_label = "Clavien-Dindo complication", val_label = c("1/2", "3a/3b/4/5"))]
 out.label[variable == "ClavienDindoComplication01", `:=`(var_label = "Clavien-Dindo complication (No/Yes)", val_label = c("No", "Yes"))]
+out.label[variable == "Histology", `:=`(var_label = "Histology", val_label = c("WDLPS", "DDLPS", "Pleomorphic LPS", "Leiomyosarcoma", "MPNST", "Solitary fibrous tumor", "Other"))]
+
 
 
 
