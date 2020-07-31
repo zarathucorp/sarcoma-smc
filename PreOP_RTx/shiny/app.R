@@ -6,7 +6,7 @@ library(shinycustomloader)      ## Loading image
 library(DT)                     ## datatable 
 library(jsmodule) ## my package: include xxxUI, xxxmodule, xxxModule
 library(survival);library(jskm);library(ggplot2)
-library(webr)
+library(treemap)
 ## 범주 21 이상인 변수는 아예 빼버림
 nfactor.limit <- 21
 
