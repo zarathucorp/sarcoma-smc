@@ -4,8 +4,8 @@ library(dplyr)
 #read data
 
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_DP")
-a <- excel_sheets("sarcoma data sheet SMC 20200713_DP추가(abutment 없으면 제외).xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200713_DP추가(abutment 없으면 제외).xlsx",sheet=x,skip=2, na = "UK")})
+a <- excel_sheets("sarcoma data sheet SMC 20200715_DP추가(POPF, histology).xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200715_DP추가(POPF, histology).xlsx",sheet=x,skip=2, na = "UK")})
 b <- a[[1]] %>% 
   left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
   left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호")
@@ -25,6 +25,11 @@ out$Sex <- as.factor(out$Sex)
 #Distal Pancreatectomy : 1=DP, 2=non-DP
 out$DP<-as.integer(c[["abutment 없으면 뺌1:DP    2:Non-DP 9:제외"]])
 
+out$POPF <- as.integer(c[["Pancreatic leak\r\n(ISGPF grade 2016)\r\n\r\n1:none      2:POPF            9:결측값\r\n(Fistula severity grade)"]])
+out$POPF <- ifelse(out$POPF == 9, NA, out$POPF)
+out$pancreas_invasion <- as.integer(c[["병리결과 (pancreas invasion)\r\n\r\n0. No involvement\r\n1. Involvement\r\n9. 결측값"]])
+out$pancreas_invasion <- ifelse(out$pancreas_invasion == 9, 0, out$pancreas_invasion)
+
 
 #Death
 out$Death<-ifelse(c[["사망여부\r\n\r\n0.Alive\r\n1.Dead\r\n2.Unknown.y"]] == "1", T,
@@ -35,9 +40,16 @@ out$day_FU <- as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날�
 out$recur_local <- c[["재발#1\r\n\r\n0: 무\r\n1: 유.x"]]
 out$recur_site <- c$`Site of local recurrence`
 out$recur_site <- ifelse(out$recur_site == "6", NA, out$recur_site)
+
+c[["Date of local recurrence"]] <- ifelse(nchar(c[["Date of local recurrence"]]) == 5, c[["Date of local recurrence"]], as.character(as.numeric(as.Date(c[["Date of local recurrence"]], format = "%d-%m-%Y") - as.Date("1899-12-30"))))
+
+
+
 out$recur_day <- ifelse(c[["재발#1\r\n\r\n0: 무\r\n1: 유.x"]] == 1, 
                         as.numeric(as.Date(as.integer(c[["Date of local recurrence"]]), origin = "1899-12-30") - as.Date(c[["수술날짜\r\n\r\ndd-mm-yyyy"]])),
                         as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날짜\r\n\r\ndd-mm-yyyy"]]))
+
+
 
 #BMI
 height <- as.numeric(c[["키\r\n(cm)"]])/100
@@ -69,9 +81,11 @@ out$PrevAbdominalOp <- c[["이전\r\nabdominal op Hx \r\n여부\r\n\r\n0. 무\r\
 
 ## PreOP RTx
 
-out$preOpRTx <- ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% c("1", "5"), T,
-                       ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% "4", F, NA)) %>% 
-  as.integer()
+#out$preOpRTx <- ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% c("1", "5"), T,
+#                       ifelse(c[["RT timing\r\n\r\n0.None \r\n1.Preop only\r\n2. IORT only\r\n3.Preop + IORT\r\n4.Postop only\r\n5.Preop + postop boost\r\n6.IORT + postop"]] %in% "4", F, NA)) %>% 
+#  as.integer()
+
+out$preOpRTx <- as.integer(c[["수술전 \r\nRT 여부\r\n\r\n0.No\r\n1.Yes"]])
 
 #PreOP chemo : 1=TRUE, 0=FALSE
 out$preOpChemo <- as.integer(c[["Neoadjuvant chemo 여부\r\n\r\n0.No\r\n1.Yes"]])
@@ -111,6 +125,9 @@ out$Histology <- as.integer(c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD L
 #FNCLCC grade
 out$FNCLCC <- as.factor(c[["FNCLCC grade\r\n\r\n1. total score 2-3\r\n2. total score 4-5\r\n3. total score 6,7,8"]])
 
+
+out$Mutifocality <- as.integer(c[["Mutifocality 여부\r\n\r\n0. No\r\n1. Yes"]])
+
 #Tumor Resection
 #R0/R1="0", R2="1", other=NA ("2"도 NA에 포함)
 out$Resection <- c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2\r\n2. Not available"]]
@@ -122,19 +139,22 @@ out$Resection <- as.factor(ifelse(out$Resection=="2", NA, out$Resection))
 # "pancreas resection" : distal pan + PD 
 # "liver resection" 
 # "major vessel resection" : iliac a & v, IVC, aorta
-out$Resection_Colon <- as.integer(
-  (c[["동반절제 장기\r\nRight colon\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nLeft colon\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nRectum\r\n\r\n0. No\r\n1. Yes"]] == "1")
-)
-out$Resection_SmallBowel <- as.integer(
-  (c[["동반절제 장기\r\nSmall bowel\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nDuodenum\r\n\r\n0. No\r\n1. Yes"]] == "1")
-)
-out$Resection_Pancreas <- as.integer(
-  (c[["동반절제 \r\n장기\r\nDistal pancreas\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 \r\n장기\r\nPanreatico-duodenectomy\r\n\r\n0. No\r\n1. Yes"]] == "1")
-)
-out$Resection_Liver <- as.integer((c[["동반절제 장기\r\nLiver\r\n\r\n0. No\r\n1. Yes"]]=="1"))
-out$Resection_MajorVesselResection <- as.integer(
+out$resection_liver <- as.integer(c[["동반절제 장기\r\nLiver\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_largebowel <- as.integer(c[["동반절제 장기\r\nLeft colon\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 장기\r\nRight colon\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 장기\r\nRectum\r\n\r\n0. No\r\n1. Yes"]] == 1)
+out$resection_uterus <- as.integer(c[["동반절제 장기\r\nUterus\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_kidney <- as.integer(c[["동반절제 장기\r\nKidney\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_spleen <- as.integer(c[["동반절제 장기\r\nspleen\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_pancreas <- as.integer(c[["동반절제 \r\n장기\r\nPanreatico-duodenectomy\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 \r\n장기\r\nDistal pancreas\r\n\r\n0. No\r\n1. Yes"]] == 1)
+out$resection_smallbowel <- as.integer(c[["동반절제 장기\r\nSmall bowel\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 장기\r\nDuodenum\r\n\r\n0. No\r\n1. Yes"]] == 1)
+out$resection_stomach <- as.integer(c[["동반절제 장기\r\nStomach\r\n\r\n0. No\r\n1. Yes"]])
+
+out$num_resected_organ <- rowSums(select(out, grep("resection_", names(out), value = T)), na.rm = T)
+
+
+out$resection_vascular <- as.integer(
   (c[["동반절제 장기\r\nIliac vein\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIVC\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIliac artery\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nAorta\r\n\r\n0. No\r\n1. Yes"]] == "1")
 )
+
 
 #OP time
 out$opTime <- as.numeric(c[["수술시간\r\n(min)"]])
@@ -177,9 +197,9 @@ out$DDLPS_postop <- as.integer(c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. D
 
 ## Variable list: For select UI in ShinyApps
 varlist <- list(
-  Base = c("DP", "primaryTumor", "DDLPS_postop", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpRTx", "preOpChemo", 
-           "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop", "Histology",
-           "FNCLCC", "Resection", grep("Resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL"),
+  Base = c("DP", "primaryTumor", "POPF", "pancreas_invasion",  "DDLPS_postop", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpRTx", "preOpChemo", 
+           "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "Mutifocality", "TumorSize", "Liposarcoma_postop", "Histology",
+           "FNCLCC", "Resection", "num_resected_organ", grep("resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL"),
   Complication = c("ClavienDindoComplication01", "ClavienDindoComplication", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray", "Abdominal.abscess", "Bowel.anastomosis.leak",
                    "Biliary.leak", "Bleeding", "Evisceration", "DVT", "Lymphatic.leak", "Pancreatic.leak", "Sepsis", "Urinary.leak", "Ileus"),
   Event = c("Death", "recur_local"),
@@ -191,7 +211,7 @@ library(data.table)
 out <- data.table(out[, unlist(varlist)])
 
 ## 범주형 변수: 범주 5 이하, recur_site
-factor_vars <- c(c(names(out)[sapply(out, function(x){length(table(x))}) <= 5]), "Histology")
+factor_vars <- setdiff(c(c(names(out)[sapply(out, function(x){length(table(x))}) <= 5]), "Histology"), "Resection_CSPL")
 out[, (factor_vars) := lapply(.SD, factor), .SDcols = factor_vars]
 conti_vars <- setdiff(names(out), factor_vars)
 
@@ -212,7 +232,10 @@ out.label[variable == "DP", `:=`(var_label = "Distal Pancreatectomy", val_label 
 out.label[variable == "ClavienDindoComplication", `:=`(var_label = "Clavien-Dindo complication", val_label = c("1/2", "3a/3b/4/5"))]
 out.label[variable == "ClavienDindoComplication01", `:=`(var_label = "Clavien-Dindo complication (No/Yes)", val_label = c("No", "Yes"))]
 out.label[variable == "Histology", `:=`(var_label = "Histology", val_label = c("WDLPS", "DDLPS", "Pleomorphic LPS", "Leiomyosarcoma", "MPNST", "Solitary fibrous tumor", "Other"))]
-
+out.label[variable == "POPF", `:=`(var_label = "POPF", val_label = c("No", "Yes"))]
+out.label[variable == "pancreas_invasion", `:=`(var_label = "Pancreas invasion", val_label = c("No", "Yes"))]
+out.label[variable == "Resection_CSPL", `:=`(var_label = "Additional number of organ resected en-bloc")]
+out.label[variable == "Resection", `:=`(var_label = "Resection margin", val_label = c("R0/R1", "R2"))]
 
 
 

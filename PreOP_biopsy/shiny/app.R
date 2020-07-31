@@ -569,7 +569,9 @@ server <- function(input, output, session) {
   
  
   output$acc_ttest <- renderDT({
-    out_tb <- CreateTableOneJS(vars= input$test_acc, strata = "Rtx_tissue_expander", data = out[get(input$disease_acc) == 1], Labels = T, labeldata = out.label)
+    data <- out[, .SD]
+    data$Rtx_tissue_expander[data$Rtx_total == 0] <- 0
+    out_tb <- CreateTableOneJS(vars= input$test_acc, strata = "Rtx_tissue_expander", data = data[get(input$disease_acc) == 1], Labels = T, labeldata = out.label)
     hide <- which(colnames(out_tb$table) == c("test", "sig"))
     datatable(out_tb$table, rownames=T, extensions= "Buttons", caption = out_tb$caption,
               options = c(opt.tbreg( out_tb$caption),

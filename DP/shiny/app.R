@@ -398,7 +398,7 @@ server <- function(input, output, session) {
     return(out.tb1)
   })
   
-  out_logistic <- callModule(logisticModule2, "logistic", data = data, data_label = data.label, data_varStruct = reactive(varlist[names(varlist)[c(2, 1)]]), nfactor.limit = nfactor.limit)
+  out_logistic <- callModule(logisticModule2, "logistic", data = data, data_label = data.label, data_varStruct = reactive(varlist[names(varlist)[c(2, 1, 3)]]), nfactor.limit = nfactor.limit)
   
   output$logistictable <- renderDT({
     hide = which(colnames(out_logistic()$table) == "sig")

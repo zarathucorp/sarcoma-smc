@@ -6,7 +6,7 @@ library(shinycustomloader)      ## Loading image
 library(DT)                     ## datatable 
 library(jsmodule) ## my package: include xxxUI, xxxmodule, xxxModule
 library(survival);library(jskm);library(ggplot2)
-
+library(webr)
 ## 범주 21 이상인 변수는 아예 빼버림
 nfactor.limit <- 21
 
@@ -69,7 +69,7 @@ ui <- navbarPage("PreOP RTx",
                  tabPanel("Table 1-3", icon = icon("percentage"),
                           sidebarLayout(
                             sidebarPanel(
-                              radioButtons("group_tb1", "Group", c("1 vs 2 vs 3", "1 vs 2/3", "1 vs 2"), select = "1 vs 2 vs 3", inline = T),
+                              radioButtons("group_tb1", "Group", c("1 vs 2 vs 3"), select = "1 vs 2 vs 3", inline = T),
                               radioButtons("seltb1", "Table", c("Table 1", "Table 2 + RTgray"), select = "Table 1", inline = T)
                             ),
                             mainPanel(
@@ -83,6 +83,21 @@ ui <- navbarPage("PreOP RTx",
                           )
                           
                  ),
+                 tabPanel("Pie chart",
+                          sidebarPanel(
+                            selectInput("variable_pie", "Main variable", choices = "ClavienDindoComplication01", selected = "ClavienDindoComplication01"),
+                            selectInput("sub_pie", "Subgroup variable", choices = "ClavienDindoGrade", selected = "ClavienDindoGrade")
+                           
+                          ),
+                          mainPanel(
+                            withLoader(plotOutput("pie"), type="html", loader="loader6"),
+                            h3("Download options"),
+                            wellPanel(
+                              uiOutput("downloadControls_pie"),
+                              downloadButton("downloadButton_pie", label = "Download the plot")
+                            )
+                          )
+                          ),
                 
                  tabPanel("Kaplan-meier plot",
                           sidebarPanel(
@@ -119,7 +134,7 @@ ui <- navbarPage("PreOP RTx",
                  tabPanel("Table 5",
                           sidebarLayout(
                             sidebarPanel(
-                              selectInput("dep_tb5", "Outcome", choices = "Resection", selected = "Resection"),
+                              selectInput("dep_tb5", "Outcome", choices = c("ClavienDindoComplication01", "ClavienDindoComplication_wo_2", "Resection"), selected = "Resection"),
                               uiOutput("indeptb5"),
                               checkboxInput("step_tb5", "Stepwise variable selection"),
                               sliderInput("decimal_tb5", "Decimal", min = 1, max = 4, value = 2)
@@ -297,7 +312,7 @@ server <- function(input, output, session) {
   output$indeptb5 <- renderUI({
     varsIni <- sapply(varlist$Base,
                           function(v){
-                            forms <- as.formula(paste("Resection", "~", v))
+                            forms <- as.formula(paste(input$dep_tb5, "~", v))
                             coef <- tryCatch(summary(glm(forms, data = out, family = binomial))$coefficients, error = function(e){return(NULL)})
                             sigOK <- ifelse(is.null(coef), F, !all(coef[-1, 4] > 0.05))
                             return(sigOK)
@@ -403,6 +418,89 @@ server <- function(input, output, session) {
               )
     )  %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
   })
+  
+  
+  
+  
+  obj.pie <- reactive({
+    
+    data <- out[, .SD]
+    data[, ClavienDindoGrade := factor(ifelse(ClavienDindoComplication01 == 0, "1", as.character(ClavienDindoGrade)))]
+    df <- data[, .N, keyby = c("ClavienDindoComplication01", "ClavienDindoGrade")][, prop:= N/sum(N) * 100]
+    
+    df$ClavienDindoComplication01 <- ifelse(df$ClavienDindoComplication01 == 0, "No", "Yes")
+    names(df)[4] <- "Clavien-Dindo complication(%)"
+    
+    
+    treemap(df, index=c("ClavienDindoComplication01","ClavienDindoGrade"), vSize="Clavien-Dindo complication(%)", type="value", vColor = "Clavien-Dindo complication(%)",
+            fontsize.labels=c(15,12),                # size of labels. Give the size per level of aggregation: size for group, size for subgroup, sub-subgroups...
+            fontcolor.labels=c("white","orange"),    # Color of labels
+            fontface.labels=c(2,1),                  # Font of labels: 1,2,3,4 for normal, bold, italic, bold-italic...
+            bg.labels=c("transparent"),              # Background color of labels
+            align.labels=list(
+              c("center", "center"), 
+              c("right", "bottom")
+            ),                                   # Where to place labels in the rectangle?
+            overlap.labels=0.5,                      # number between 0 and 1 that determines the tolerance of the overlap between labels. 0 means that labels of lower levels are not printed if higher level labels overlap, 1  means that labels are always printed. In-between values, for instance the default value .5, means that lower level labels are printed if other labels do not overlap with more than .5  times their area size.
+            inflate.labels=F,                        # If true, labels are bigger when rectangle is bigger.
+            
+    ) 
+  })
+  
+  output$pie <- renderPlot({
+   print(obj.pie())
+    
+    
+    
+  })
+  
+  output$downloadControls_pie <- renderUI({
+    fluidRow(
+      column(4,
+             selectizeInput("pie_file_ext", "File extension (dpi = 300)", 
+                            choices = c("jpg","pdf", "tiff", "svg", "emf"), multiple = F, 
+                            selected = "jpg"
+             )
+      ),
+      column(4,
+             sliderInput("fig_width_pie", "Width (in):",
+                         min = 5, max = 20, value = 8
+             )
+      ),
+      column(4,
+             sliderInput("fig_height_pie", "Height (in):",
+                         min = 5, max = 20, value = 6
+             )
+      )
+    )
+  })
+  
+  output$downloadButton_pie <- downloadHandler(
+    filename =  function() {
+      paste("pie_plot.", input$pie_file_ext ,sep="")
+    },
+    # content is a function with argument file. content writes the plot to the device
+    content = function(file) {
+      withProgress(message = 'Download in progress',
+                   detail = 'This may take a while...', value = 0, {
+                     for (i in 1:15) {
+                       incProgress(1/15)
+                       Sys.sleep(0.01)
+                     }
+                     
+                     if (input$kap_file_ext == "emf"){
+                       devEMF::emf(file, width = input$fig_width_pie, height =input$fig_height_pie, coordDPI = 300, emfPlus = F)
+                       print(obj.pie())
+                       dev.off()
+                       
+                     } else{
+                       ggsave(file, obj.pie(), dpi = 300, units = "in", width = input$fig_width_pie, height =input$fig_height_pie)
+                     }
+                     
+                   })
+      
+      
+    })
 }
 
 

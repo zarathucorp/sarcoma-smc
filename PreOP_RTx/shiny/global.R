@@ -4,14 +4,14 @@ library(dplyr)
 #read data
 
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_RT")
-a <- excel_sheets("sarcoma data sheet SMC 20200709.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200709.xlsx",sheet=x,skip=2, na = "UK")})
+a <- excel_sheets("sarcoma data sheet SMC 20200731.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200731.xlsx",sheet=x,skip=2, na = "UK")})
 b <- a[[1]] %>% 
   left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
   left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호")
 
 #Age 계산
-b$Age <- as.numeric(b[["수술날짜\r\n\r\ndd-mm-yyyy"]] - b[["생년월일\r\n\r\ndd-mm-yyyy"]])/365.25
+b$Age <- as.numeric(b[["수술날짜\r\n\r\ndd-mm-yyyy.x"]] - b[["생년월일\r\n\r\ndd-mm-yyyy"]])/365.25
 
 
 #c <- b %>% 
@@ -43,14 +43,14 @@ out$Group1_23 <- as.factor(ifelse(out$Group == 1, 1, 23))
 out$Death<-ifelse(c[["사망여부\r\n\r\n0.Alive\r\n1.Dead\r\n2.Unknown.y"]] == "1", T,
                   ifelse(c[["사망여부\r\n\r\n0.Alive\r\n1.Dead\r\n2.Unknown.y"]]== "0", F, NA)) %>% as.integer
 ## 관찰기간
-out$day_FU <- as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날짜\r\n\r\ndd-mm-yyyy"]])
+out$day_FU <- as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날짜\r\n\r\ndd-mm-yyyy.x"]])
 
 out$recur_local <- c[["재발#1\r\n\r\n0: 무\r\n1: 유.x"]]
-out$recur_site <- c$`Site of local recurrence`
+out$recur_site <- c$`Site of recurrence`
 out$recur_site <- ifelse(out$recur_site == "6", NA, out$recur_site)
 out$recur_day <- ifelse(c[["재발#1\r\n\r\n0: 무\r\n1: 유.x"]] == 1, 
-                        as.numeric(as.Date(as.integer(c[["Date of local recurrence"]]), origin = "1899-12-30") - as.Date(c[["수술날짜\r\n\r\ndd-mm-yyyy"]])),
-                        as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날짜\r\n\r\ndd-mm-yyyy"]]))
+                        as.numeric(as.Date(as.integer(c[["Date of local recurrence"]]), origin = "1899-12-30") - as.Date(c[["수술날짜\r\n\r\ndd-mm-yyyy.x"]])),
+                        as.numeric(c[["마지막 f/u\r\n\r\ndd-mm-yyyy"]] - c[["수술날짜\r\n\r\ndd-mm-yyyy.x"]]))
 
 
 #BMI
@@ -121,7 +121,7 @@ out$FNCLCC <- as.factor(c[["FNCLCC grade\r\n\r\n1. total score 2-3\r\n2. total s
 
 #Tumor Resection
 #R0/R1="0", R2="1", other=NA ("2"도 NA에 포함)
-out$Resection <- c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2\r\n2. Not available"]]
+out$Resection <- c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2: post OP 1주 CT에서 있을시 포함\r\n2. Not available"]]
 out$Resection <- as.factor(ifelse(out$Resection=="2", NA, out$Resection))
 
 #Combined Organ Resection
@@ -130,26 +130,19 @@ out$Resection <- as.factor(ifelse(out$Resection=="2", NA, out$Resection))
 # "pancreas resection" : distal pan + PD 
 # "liver resection" 
 # "major vessel resection" : iliac a & v, IVC, aorta
-out$Resection_Colon <- as.integer(
-  (c[["동반절제 장기\r\nRight colon\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nLeft colon\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nRectum\r\n\r\n0. No\r\n1. Yes"]] == "1")
-  )
+out$resection_liver <- as.integer(c[["동반절제 장기\r\nLiver\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_largebowel <- as.integer(c[["동반절제 장기\r\nLeft colon\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 장기\r\nRight colon\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 장기\r\nRectum\r\n\r\n0. No\r\n1. Yes"]] == 1)
+out$resection_uterus <- as.integer(c[["동반절제 장기\r\nUterus\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_kidney <- as.integer(c[["동반절제 장기\r\nKidney\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_spleen <- as.integer(c[["동반절제 장기\r\nspleen\r\n\r\n0. No\r\n1. Yes"]])
+out$resection_pancreas <- as.integer(c[["동반절제 \r\n장기\r\nPanreatico-duodenectomy\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 \r\n장기\r\nDistal pancreas\r\n\r\n0. No\r\n1. Yes"]] == 1)
+out$resection_smallbowel <- as.integer(c[["동반절제 장기\r\nSmall bowel\r\n\r\n0. No\r\n1. Yes"]] == 1 | c[["동반절제 장기\r\nDuodenum\r\n\r\n0. No\r\n1. Yes"]] == 1)
+out$resection_stomach <- as.integer(c[["동반절제 장기\r\nStomach\r\n\r\n0. No\r\n1. Yes"]])
 
-out$Resection_SmallBowel <- as.integer(
-  (c[["동반절제 장기\r\nSmall bowel\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nDuodenum\r\n\r\n0. No\r\n1. Yes"]] == "1")
-  )
-
-out$Resection_Colon_or_SmallBowel <- as.integer(out$Resection_Colon | out$Resection_SmallBowel)
-
-out$Resection_Pancreas <- as.integer(
-  (c[["동반절제 \r\n장기\r\nDistal pancreas\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 \r\n장기\r\nPanreatico-duodenectomy\r\n\r\n0. No\r\n1. Yes"]] == "1")
-  )
-
-out$Resection_Liver <- as.integer((c[["동반절제 장기\r\nLiver\r\n\r\n0. No\r\n1. Yes"]]=="1"))
-
-out$Resection_Pancreas_or_Liver <- as.integer(out$Resection_Pancreas | out$Resection_Liver)
+out$num_resected_organ <- rowSums(select(out, grep("resection_", names(out), value = T)), na.rm = T)
 
 
-out$Resection_MajorVesselResection <- as.integer(
+out$resection_vascular <- as.integer(
   (c[["동반절제 장기\r\nIliac vein\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIVC\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nIliac artery\r\n\r\n0. No\r\n1. Yes"]] == "1") | (c[["동반절제 장기\r\nAorta\r\n\r\n0. No\r\n1. Yes"]] == "1")
   )
 
@@ -163,9 +156,12 @@ out$intraOpTransfusion <- as.integer(c[["PRBC 수혈 수"]])
 out$EBL <- as.numeric(c[["EBL\r\n(ml)"]])
 
 
-out$ClavienDindoComplication <- as.integer(c[["Clavien-Dindo complication \r\n\r\n0. No\r\n1. Yes"]])
+out$ClavienDindoComplication01 <- as.integer(c[["Clavien-Dindo complication \r\n\r\n0. No\r\n1. Yes"]])
+out$ClavienDindoComplication_wo_2 <-ifelse(out$ClavienDindoComplication01 == 1 & c[["Clavien-Dindo grade \r\n\r\n2/3a/3b/4a/4b/5"]]=="2",0,out$ClavienDindoComplication01)
 out$ClavienDindoGrade <- c[["Clavien-Dindo grade \r\n\r\n2/3a/3b/4a/4b/5"]]
-out$ClavienDindoGrade <- as.factor(ifelse(out$ClavienDindoGrade== "0" , NA, out$ClavienDindoGrade))
+out$ClavienDindoGrade <- as.factor(ifelse(out$ClavienDindoGrade== "0" | is.na(out$ClavienDindoGrade) , "1", out$ClavienDindoGrade))
+
+
 
 #post OP transfusion
 out$postOpTransfusion <- as.integer(c[["수술 후 PRBC 수혈 여부\r\n\r\n0. No\r\n1. Yes"]])
@@ -181,6 +177,9 @@ out$HospitalDay <- as.numeric(c[["재원일수(days)"]])
 
 out$RTgray <- c[["RT dose\r\n(Gy)"]]
 
+out$preOP_Rtx_to_OP_day <- c$`preOP RTx to OP duration`
+
+
 for (vname in names(c)[c(130:137, 139:141)]){
   vn.new <- gsub(" ", ".", strsplit(vname, "\r")[[1]][1])
   out[[vn.new]] <- as.integer(c[[vname]])
@@ -192,8 +191,8 @@ for (vname in names(c)[c(130:137, 139:141)]){
 varlist <- list(
   Base = c("Group", "Group1_23", "primaryTumor", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
            "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop",
-           "FNCLCC", "Resection", grep("Resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL"),
-  Complication = c("ClavienDindoComplication", "ClavienDindoGrade", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray"),
+           "FNCLCC", "Resection", "num_resected_organ", grep("resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL", "preOP_Rtx_to_OP_day"),
+  Complication = c("ClavienDindoComplication01", "ClavienDindoComplication_wo_2", "ClavienDindoGrade", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray"),
   Event = c("Death", "recur_local"),
   Day = c("day_FU", "recur_day")
 )
@@ -225,4 +224,7 @@ out.label[variable == "Group1_23", `:=`(var_label = "Group", val_label = c("PreO
 out.label[variable == "primaryTumor", `:=`(var_label = "Primary tumor", val_label = c("No", "Yes"))]
 
 out.label[variable == "Resection", `:=`(var_label = "Resection", val_label = c("R0/R1", "R2"))]
+out.label[variable == "preOP_Rtx_to_OP_day", `:=`(var_label = "preOP RTx to OP duration")]
+out.label[variable == "ClavienDindoComplication_wo_2", `:=`(var_label = "Clavien-Dindo complication", val_label = c("1/2", "3a/3b/4/5"))]
+out.label[variable == "ClavienDindoComplication01", `:=`(var_label = "Clavien-Dindo complication (No/Yes)", val_label = c("No", "Yes"))]
 
