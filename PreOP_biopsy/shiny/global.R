@@ -5,8 +5,8 @@ library(data.table)
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_biopsy")
 
 ## Read all sheet
-a <- excel_sheets("sarcoma data sheet SMC 20200731.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200731.xlsx", sheet = x, skip = 2, na = c("UK", "ND"))})
+a <- excel_sheets("sarcoma data sheet SMC 20200811.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200811.xlsx", sheet = x, skip = 2, na = c("UK", "ND"))})
 
 
 ## Merge sheet 1-7, by 환자번호
@@ -41,8 +41,8 @@ out[out$`환자번호` == 31050857, "Sex"] <- "F"
 ## PreOp biopsy
 out$liposarcoma_preop <- as.integer(c[["preOP Bx. 결과\r\n\r\n0. WD \r\n1. DD \r\n2. Pleomorphic \r\n3. LMS\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] %in% c("0", "1", "1or 2", "2"))
 out$liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] %in% c(0, 1, 2)) |
-                          (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] == 7) &
-                             grepl("liposarcoma|Liposarcoma", c[["Other \r\n\r\ncomment"]]))  
+                                       (c[["병리결과\r\n\r\n0. WD Liposarcoma\r\n1. DD Liposarcoma\r\n2. Pleomorphic Liposarcoma\r\n3. Leiomyosarcoma\r\n4. MPNST\r\n5. Solitary fibrous tumor\r\n6. PEComa\r\n7. Other"]] == 7) &
+                                       grepl("liposarcoma|Liposarcoma", c[["Other \r\n\r\ncomment"]]))  
 
 out$RPS_preop <- as.integer(c$preOP.Retroperitoneal.sarcoma..RPS.)
 out$RPS_postop <- as.integer(c$post.OP.retroperitoneal.sarcoma..RPS. | 
@@ -114,17 +114,17 @@ out$Chemo_postop <- as.integer(c[["Adjuvant chemo 여부\r\n\r\n0.No\r\n1.Yes"]]
 out$Chemo_both <- as.integer(out$Chemo_preop | out$Chemo_postop)
 
 out$tumor_size<-c[["종양 크기\r\n(Tumor size, mm)\r\n다발성인 경우 largest tumor size"]]
-out$resection_margin <- as.integer(c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2: post OP 1주 CT에서 있을시 포함\r\n2. Not available"]])
+out$resection_margin <- as.integer(c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2: post OP 1주 CT에서 있을시 포함,debulking op\r\n2. Not available"]])
 out$resection_margin <- ifelse(out$resection_margin == 2, NA, out$resection_margin)
 
-out$FNCLCC_grade <- c[["FNCLCC grade\r\n\r\n1. total score 2-3\r\n2. total score 4-5\r\n3. total score 6,7,8"]]
+out$FNCLCC_grade <- c[["FNCLCC grade\r\n\r\n1/2/3/UK"]]
 out$FNCLCC_grade <- ifelse(out$FNCLCC_grade == "UK", NA, out$FNCLCC_grade)
 
 out$FNCLCC_grade1 <- as.integer(out$FNCLCC_grade == 1)
 out$FNCLCC_grade2 <- as.integer(out$FNCLCC_grade == 2)
 out$FNCLCC_grade3 <- as.integer(out$FNCLCC_grade == 3)
 
-out$sarcomatosis_pattern <- as.integer(c[["Site of recurrence"]] == "4")
+out$sarcomatosis_pattern <- as.integer(c[["Site of recurrence"]] == "3")
 
 out$ClavienDindoComplication01 <- as.integer(c[["Clavien-Dindo complication \r\n\r\n0. No\r\n1. Yes"]])
 out$ClavienDindoComplication_wo_2 <-ifelse(out$ClavienDindoComplication01 == 1 & c[["Clavien-Dindo grade \r\n\r\n2/3a/3b/4a/4b/5"]]=="2",0,out$ClavienDindoComplication01)
@@ -133,7 +133,8 @@ out$ClavienDindoGrade <- factor(ifelse(out$ClavienDindoGrade== "0" | is.na(out$C
 
 ## Variable list: For select UI in ShinyApps
 varlist <- list(
-  Base = c("biopsy_preop_primary", "Age", "Sex", "type_needle", "liposarcoma_preop", "liposarcoma_postop", "RPS_preop", "RPS_postop", "DDLPS_postop", "histology_postop", "recur_site", names(out)[17:45]),
+  Base = c("biopsy_preop_primary", "Age", "Sex", "type_needle", "liposarcoma_preop", "liposarcoma_postop", "RPS_preop", "RPS_postop", "DDLPS_postop", "histology_postop", "recur_site", 
+           names(out)[17:45], "ClavienDindoComplication01", "ClavienDindoComplication_wo_2", "ClavienDindoGrade"),
   Event = c("death", "recur_local", "sarcomatosis_pattern"),
   Day = c("day_FU", "recur_day")
 )
@@ -143,7 +144,7 @@ varlist <- list(
 out <- data.table(out[, -1])
 
 ## 범주형 변수: 범주 5 이하, recur_site
-factor_vars <- c(names(out)[sapply(out, function(x){length(table(x))}) <= 5], c( "recur_site", "histology_postop", "ClavienDindoGrade"))
+factor_vars <- union(names(out)[sapply(out, function(x){length(table(x))}) <= 5], c( "recur_site", "histology_postop", "ClavienDindoGrade"))
 out[, (factor_vars) := lapply(.SD, factor), .SDcols = factor_vars]
 conti_vars <- setdiff(names(out), factor_vars)
 
@@ -165,7 +166,7 @@ out.label[variable == "resection_margin", `:=`(var_label = "Resection", val_labe
 out.label[variable == "histology_postop", `:=`(var_label = "Resection", val_label = c("WD Liposarcoma", "DD Liposarcoma", "Pleomorphic Liposarcoma", "Leiomyosarcoma",
                                                                                       "MPNST", "Solitary fibrous tumor", "PEComa", "Other"))]
 
-out.label[variable == "recur_site", `:=`(var_label = "Site of recurrence", val_label = c("None", "Local", "Lung", "Liver", "Retroperitoneal  other than primary", "Sarcomatosis", "Other", "Unknown"))]
+out.label[variable == "recur_site", `:=`(var_label = "Site of recurrence", val_label = c("None", "Local", "Retroperitoneal  other than primary", "Sarcomatosis", "Other"))]
 out.label[variable == "ClavienDindoComplication_wo_2", `:=`(var_label = "Clavien-Dindo complication", val_label = c("1/2", "3a/3b/4/5"))]
 out.label[variable == "ClavienDindoComplication01", `:=`(var_label = "Clavien-Dindo complication (No/Yes)", val_label = c("No", "Yes"))]
 
