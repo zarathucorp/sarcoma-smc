@@ -3,8 +3,8 @@ library(dplyr)
 library(jstable)
 
 #setwd("~/ShinyApps/LeeKW/sarcoma_TumorGrade")
-a <- excel_sheets("sarcoma data sheet SMC 20200817.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200817.xlsx",sheet=x, skip=2, na = c("UK"))})
+a <- excel_sheets("sarcoma data sheet SMC 20200907.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200907.xlsx",sheet=x, skip=2, na = c("UK"))})
 b <- a[[1]] %>% 
   left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
   left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호") 
@@ -16,9 +16,11 @@ data.2ndLR <- filter(a[[8]], 환자번호 %in% a.list$Number) %>%
   select("환자번호", "Date of local recurrence") %>% rename("Date_2ndLR" = "Date of local recurrence") %>% 
   mutate(Date_2ndLR = as.Date(as.numeric(Date_2ndLR), origin = "1899-12-30"))
 
+data.recurPath <- read.csv("recur_pathology.csv", na.strings = "UK")
+names(data.recurPath) <- c("환자번호", "Mitosis_firstLR", "Necrosis_firstLR")
+data.recurPath$환자번호 <- as.character(data.recurPath$환자번호)
 
-
-c<-b %>% filter(b$환자번호 %in% a.list$Number) %>% left_join(data.2ndLR, by = "환자번호")
+c<-b %>% filter(b$환자번호 %in% a.list$Number) %>% left_join(data.2ndLR, by = "환자번호") %>% left_join(data.recurPath, by = "환자번호")
 
 
 c$Age<-as.numeric(c[["수술날짜\r\n\r\ndd-mm-yyyy.x"]] - c[["생년월일\r\n\r\ndd-mm-yyyy"]])/365.25
@@ -90,12 +92,17 @@ out$complication_UrinaryLeak<-as.factor(c[["Urinary leak\r\n\r\n0. No\r\n1. Yes"
 out$complication_Ileus<-as.factor(c[["Ileus\r\n\r\n0. No\r\n1. Yes"]])
 out$complication_others<-c[["\r\nOthers\r\n\r\ncomment"]]
 
-out$Necrosis_primary<-as.factor(ifelse(c[["Necrosis\r\n\r\n1. Absent\r\n2.<50% \r\n3.≥50%"]]=="1","Absent",
-                                       ifelse(c[["Necrosis\r\n\r\n1. Absent\r\n2.<50% \r\n3.≥50%"]]=="2","<50%","≥50%")))
-out$Mitosis_primary<-as.factor(ifelse(c[["Mitotic index\r\n\r\n1.<9/10 HPF\r\n2. 10-19/10 HPF\r\n3. ≥20/10 HPF"]]=="1","<9/10 HPF",
-                                      ifelse(c[["Mitotic index\r\n\r\n1.<9/10 HPF\r\n2. 10-19/10 HPF\r\n3. ≥20/10 HPF"]]=="2","10-19/10 HPF","≥20/10 HPF")))
+out$Necrosis_primary <- factor(c[["Necrosis\r\n\r\n1. Absent\r\n2.<50% \r\n3.≥50%"]])
+out$Mitosis_primary <- factor(c[["Mitotic index\r\n\r\n1.<9/10 HPF\r\n2. 10-19/10 HPF\r\n3. ≥20/10 HPF"]])
 
+out$Mitosis_firstLR <- factor(c$Mitosis_firstLR)
+out$Necrosis_firstLR <- factor(c$Necrosis_firstLR)
 
 
 out.label <- jstable::mk.lev(out)
+out.label[variable == "Necrosis_primary", `:=`(var_label = "Necrosis (primary)", val_label = c("Absent", "<50%", "≥50%"))]
+out.label[variable == "Mitosis_primary", `:=`(var_label = "Mitosis (primary)", val_label = c("<9/10 HPF", "10-19/10 HPF", "≥20/10 HPF"))]
+
+out.label[variable == "Necrosis_firstLR", `:=`(var_label = "Necrosis (1st recurrence)", val_label = c("Absent", "<50%", "≥50%"))]
+out.label[variable == "Mitosis_firstLR", `:=`(var_label = "Mitosis (1st recurrence)", val_label = c("<9/10 HPF", "10-19/10 HPF", "≥20/10 HPF"))]
 

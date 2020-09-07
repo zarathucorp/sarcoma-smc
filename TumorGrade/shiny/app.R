@@ -11,7 +11,7 @@ library(jskm)
 
 vars.tb1 <- c("Age","Sex","Height","Weight",
               "underlying_DM","underlying_HTN","underlying_CAD","underlying_CRD",
-              "Histology_primary","FNCLCCgrade_primary","Necrosis_primary","Mitosis_primary",
+              "Histology_primary","FNCLCCgrade_primary","Necrosis_primary","Mitosis_primary", "Necrosis_firstLR", "Mitosis_firstLR", 
               "Histology_firstLR","FNCLCCgrade_firstLR",
               "RTx","Chemo","Day_FU","Day_LR")
 
@@ -27,7 +27,7 @@ ui<-navbarPage(
                  )
              )
     ),
-
+    
     tabPanel("Kaplan-meier plot",
              sidebarPanel(
                  radioButtons("event_kap", "Outcome", choices = c("Death", "SecondLR"), selected = "Death", inline =T),
@@ -70,7 +70,7 @@ server<-function(input,output,session){
     
     
     output$table1<-renderDT({
-        tb1 <- CreateTableOneJS(vars.tb1, strata = strata.tb1(), data = out, nonnormal = c("Day_FU","Day_LR"))
+        tb1 <- CreateTableOneJS(vars.tb1, strata = strata.tb1(), data = out, nonnormal = c("Day_FU","Day_LR"), Labels = T, labeldata = out.label)
         tb <- tb1$table
         cap <- tb1$caption
         out.tb1 <- datatable(tb, rownames = T, extensions = "Buttons", caption = cap,
@@ -87,8 +87,8 @@ server<-function(input,output,session){
     })
     
     
-
-
+    
+    
     
     
     obj.km <- reactive({
@@ -113,7 +113,7 @@ server<-function(input,output,session){
                   ystrataname = label[variable == var.event, var_label][1], ystratalabs = label[variable == var.group][level %in% levels(data[[var.group]]), val_label],
                   legendposition = c(0.2, 0.45), timeby = 365,
                   surv.scale = "percent", mark = F, pval = T, table = T, data = data)
-    
+        
     })
     
     output$kaplan_plot <- renderPlot({

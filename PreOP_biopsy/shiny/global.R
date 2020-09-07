@@ -5,8 +5,8 @@ library(data.table)
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_biopsy")
 
 ## Read all sheet
-a <- excel_sheets("sarcoma data sheet SMC 20200811.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200811.xlsx", sheet = x, skip = 2, na = c("UK", "ND"))})
+a <- excel_sheets("sarcoma data sheet SMC 20200907.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200907.xlsx", sheet = x, skip = 2, na = c("UK", "ND"))})
 
 
 ## Merge sheet 1-7, by 환자번호
@@ -114,17 +114,17 @@ out$Chemo_postop <- as.integer(c[["Adjuvant chemo 여부\r\n\r\n0.No\r\n1.Yes"]]
 out$Chemo_both <- as.integer(out$Chemo_preop | out$Chemo_postop)
 
 out$tumor_size<-c[["종양 크기\r\n(Tumor size, mm)\r\n다발성인 경우 largest tumor size"]]
-out$resection_margin <- as.integer(c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2: post OP 1주 CT에서 있을시 포함,debulking op\r\n2. Not available"]])
+out$resection_margin <- as.integer(c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2: post OP 1주 CT에서 있을시(r/o시 그 다음 f/u CT가지) ,debulking op\r\n2. Not available"]])
 out$resection_margin <- ifelse(out$resection_margin == 2, NA, out$resection_margin)
 
-out$FNCLCC_grade <- c[["FNCLCC grade\r\n\r\n1/2/3/UK"]]
+out$FNCLCC_grade <- c[["FNCLCC grade\r\n\r\n1/2/3/UK\r\n\r\npathology reoport&최윤라교수님 판독"]]
 out$FNCLCC_grade <- ifelse(out$FNCLCC_grade == "UK", NA, out$FNCLCC_grade)
 
 out$FNCLCC_grade1 <- as.integer(out$FNCLCC_grade == 1)
 out$FNCLCC_grade2 <- as.integer(out$FNCLCC_grade == 2)
 out$FNCLCC_grade3 <- as.integer(out$FNCLCC_grade == 3)
 
-out$sarcomatosis_pattern <- as.integer(c[["Site of recurrence"]] == "3")
+out$sarcomatosis_pattern <- as.integer(c[["Site of recurrence"]] == "4")
 
 out$ClavienDindoComplication01 <- as.integer(c[["Clavien-Dindo complication \r\n\r\n0. No\r\n1. Yes"]])
 out$ClavienDindoComplication_wo_2 <-ifelse(out$ClavienDindoComplication01 == 1 & c[["Clavien-Dindo grade \r\n\r\n2/3a/3b/4a/4b/5"]]=="2",0,out$ClavienDindoComplication01)
@@ -133,8 +133,7 @@ out$ClavienDindoGrade <- factor(ifelse(out$ClavienDindoGrade== "0" | is.na(out$C
 
 ## Variable list: For select UI in ShinyApps
 varlist <- list(
-  Base = c("biopsy_preop_primary", "Age", "Sex", "type_needle", "liposarcoma_preop", "liposarcoma_postop", "RPS_preop", "RPS_postop", "DDLPS_postop", "histology_postop", "recur_site", 
-           names(out)[17:45], "ClavienDindoComplication01", "ClavienDindoComplication_wo_2", "ClavienDindoGrade"),
+  Base = c("biopsy_preop_primary", "Age", "Sex", "type_needle", "liposarcoma_preop", "liposarcoma_postop", "RPS_preop", "RPS_postop", "DDLPS_postop", "histology_postop", "recur_site", names(out)[17:45]),
   Event = c("death", "recur_local", "sarcomatosis_pattern"),
   Day = c("day_FU", "recur_day")
 )

@@ -5,8 +5,7 @@ source("global.R")              ## Load global.R
 library(shinycustomloader)      ## Loading image
 library(DT)                     ## datatable 
 library(jsmodule) ## my package: include xxxUI, xxxmodule, xxxModule
-library(survival);library(jskm);library(ggplot2)
-library(treemap)
+library(survival);library(jskm);library(ggplot2);library(treemap)
 ## 범주 21 이상인 변수는 아예 빼버림
 nfactor.limit <- 21
 
@@ -85,9 +84,11 @@ ui <- navbarPage("PreOP RTx",
                  ),
                  tabPanel("Pie chart",
                           sidebarPanel(
+                            radioButtons("group_pie", "Data", c("All", out.label[variable == "Group", val_label]), selected = "All", inline = T),
+                            radioButtons("type_pie", "Plot type", c("Pie", "Treemap"), selected = "Pie", inline = T),
                             selectInput("variable_pie", "Main variable", choices = "ClavienDindoComplication01", selected = "ClavienDindoComplication01"),
                             selectInput("sub_pie", "Subgroup variable", choices = "ClavienDindoGrade", selected = "ClavienDindoGrade")
-                           
+                            
                           ),
                           mainPanel(
                             withLoader(plotOutput("pie"), type="html", loader="loader6"),
@@ -97,8 +98,8 @@ ui <- navbarPage("PreOP RTx",
                               downloadButton("downloadButton_pie", label = "Download the plot")
                             )
                           )
-                          ),
-                
+                 ),
+                 
                  tabPanel("Kaplan-meier plot",
                           sidebarPanel(
                             selectInput("event_kap", "Outcome", choices = varlist[names(varlist)[3]], selected = varlist$Event[1]),
@@ -184,13 +185,13 @@ server <- function(input, output, session) {
   
   vars.tb1 <- reactive({
     switch (input$seltb1,
-      "Table 1" = c(setdiff(varlist$Base, c("Group", "Group1_23")), "day_FU"),
-      "Table 2 + RTgray" = varlist$Complication
+            "Table 1" = c(setdiff(varlist$Base, c("Group", "Group1_23")), "day_FU"),
+            "Table 2 + RTgray" = varlist$Complication
     )
   })
-
   
-
+  
+  
   
   output$table1 <- renderDT({
     out_tb1 <- CreateTableOneJS(vars = vars.tb1(), strata = strata.tb1(), data = data.tb1(), labeldata = out.label, Labels = T, showAllLevels = F)
@@ -225,7 +226,7 @@ server <- function(input, output, session) {
     }
   })
   
-
+  
   
   obj.km <- reactive({
     req(input$group_kap)
@@ -251,7 +252,7 @@ server <- function(input, output, session) {
     Makekaplan(event.original = input$event_kap, day.original = varlist$Day[varlist$Event == input$event_kap],  var.group = gvar, data = data, data.label = label,
                yr.event = input$year_kap/12, cut.yr = T, timeby = 60, xlims = input$year_kap/12 * 365, ylims = input$ylims_kap) 
   })
-    
+  
   output$kaplan_plot <- renderPlot({
     print(obj.km())
   })
@@ -306,18 +307,18 @@ server <- function(input, output, session) {
   
   
   
-
+  
   
   
   output$indeptb5 <- renderUI({
     varsIni <- sapply(varlist$Base,
-                          function(v){
-                            forms <- as.formula(paste(input$dep_tb5, "~", v))
-                            coef <- tryCatch(summary(glm(forms, data = out, family = binomial))$coefficients, error = function(e){return(NULL)})
-                            sigOK <- ifelse(is.null(coef), F, !all(coef[-1, 4] > 0.05))
-                            return(sigOK)
-                            
-                          })
+                      function(v){
+                        forms <- as.formula(paste(input$dep_tb5, "~", v))
+                        coef <- tryCatch(summary(glm(forms, data = out, family = binomial))$coefficients, error = function(e){return(NULL)})
+                        sigOK <- ifelse(is.null(coef), F, !all(coef[-1, 4] > 0.05))
+                        return(sigOK)
+                        
+                      })
     selectInput("indep_tb5", "Risk factors to include", choices = c("Group", "Group1_23", varlist$Base), selected = c("Group", varlist$Base[varsIni]), multiple = T)
     
   })
@@ -341,7 +342,7 @@ server <- function(input, output, session) {
     
     res.logistic <- glm(form, data = out, family = binomial)
     if (input$step_tb5 == T){
-
+      
       res.logistic <- stats::step(glm(form, data = out[complete.cases(out[, .SD, .SDcols = c(y, xs)])],  family = binomial), direction = "backward", scope = list(upper = "~.", lower = "~1"))
     }
     
@@ -364,7 +365,7 @@ server <- function(input, output, session) {
     ) %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
   })
   
-
+  
   output$coxtable <- renderDT({
     validate(
       need(!is.null(input$cov_cox), "Please select at least 1 independent variable.")
@@ -425,30 +426,43 @@ server <- function(input, output, session) {
   obj.pie <- reactive({
     
     data <- out[, .SD]
+    if (input$group_pie != "All"){
+      data <- out[Group == out.label[variable == "Group" & val_label == input$group_pie, level]] 
+    }
+    
     data[, ClavienDindoGrade := factor(ifelse(ClavienDindoComplication01 == 0, "1", as.character(ClavienDindoGrade)))]
-    df <- data[, .N, keyby = c("ClavienDindoComplication01", "ClavienDindoGrade")][, prop:= N/sum(N) * 100]
+    df <- data[, .N, keyby = c("ClavienDindoComplication01", "ClavienDindoGrade")][, prop:= round(N/sum(N) * 100, 1)]
     
     df$ClavienDindoComplication01 <- ifelse(df$ClavienDindoComplication01 == 0, "No", "Yes")
     names(df)[4] <- "Clavien-Dindo complication(%)"
     
+    if (input$type_pie == "Treemap"){
+      treemap(df, index=c("ClavienDindoComplication01","ClavienDindoGrade"), vSize="Clavien-Dindo complication(%)", type="value", vColor = "Clavien-Dindo complication(%)",
+              fontsize.labels=c(15,12),                # size of labels. Give the size per level of aggregation: size for group, size for subgroup, sub-subgroups...
+              fontcolor.labels=c("white","orange"),    # Color of labels
+              fontface.labels=c(2,1),                  # Font of labels: 1,2,3,4 for normal, bold, italic, bold-italic...
+              bg.labels=c("transparent"),              # Background color of labels
+              align.labels=list(
+                c("center", "center"), 
+                c("right", "bottom")
+              ),                                   # Where to place labels in the rectangle?
+              overlap.labels=0.5,                      # number between 0 and 1 that determines the tolerance of the overlap between labels. 0 means that labels of lower levels are not printed if higher level labels overlap, 1  means that labels are always printed. In-between values, for instance the default value .5, means that lower level labels are printed if other labels do not overlap with more than .5  times their area size.
+              inflate.labels=F,                        # If true, labels are bigger when rectangle is bigger.
+              
+      )
+    } else{
+      par(mfrow= c(1, 2))
+      df1 <- df[, lapply(.SD, sum), .SDcols = c("N","Clavien-Dindo complication(%)"), keyby = "ClavienDindoComplication01"]
+      pie(df1$N, label = paste0(df1[["Clavien-Dindo complication(%)"]], "%"), col = gray.colors(nrow(df1)), init.angle = 90)
+      legend("topright", legend = df1$ClavienDindoComplication01, fill = gray.colors(nrow(df1)))
+      pie(df[-1]$N, label = paste0(df[-1][["Clavien-Dindo complication(%)"]], "%"), col = gray.colors(nrow(df[-1])), init.angle = 90)
+      legend("topright", legend = df[-1]$ClavienDindoGrade, fill = gray.colors(nrow(df[-1])))
+    }
     
-    treemap(df, index=c("ClavienDindoComplication01","ClavienDindoGrade"), vSize="Clavien-Dindo complication(%)", type="value", vColor = "Clavien-Dindo complication(%)",
-            fontsize.labels=c(15,12),                # size of labels. Give the size per level of aggregation: size for group, size for subgroup, sub-subgroups...
-            fontcolor.labels=c("white","orange"),    # Color of labels
-            fontface.labels=c(2,1),                  # Font of labels: 1,2,3,4 for normal, bold, italic, bold-italic...
-            bg.labels=c("transparent"),              # Background color of labels
-            align.labels=list(
-              c("center", "center"), 
-              c("right", "bottom")
-            ),                                   # Where to place labels in the rectangle?
-            overlap.labels=0.5,                      # number between 0 and 1 that determines the tolerance of the overlap between labels. 0 means that labels of lower levels are not printed if higher level labels overlap, 1  means that labels are always printed. In-between values, for instance the default value .5, means that lower level labels are printed if other labels do not overlap with more than .5  times their area size.
-            inflate.labels=F,                        # If true, labels are bigger when rectangle is bigger.
-            
-    ) 
   })
   
   output$pie <- renderPlot({
-   print(obj.pie())
+    print(obj.pie())
     
     
     
@@ -458,8 +472,8 @@ server <- function(input, output, session) {
     fluidRow(
       column(4,
              selectizeInput("pie_file_ext", "File extension (dpi = 300)", 
-                            choices = c("jpg","pdf", "tiff", "svg", "emf"), multiple = F, 
-                            selected = "jpg"
+                            choices = c("emf"), multiple = F, 
+                            selected = "emf"
              )
       ),
       column(4,
@@ -488,10 +502,32 @@ server <- function(input, output, session) {
                        Sys.sleep(0.01)
                      }
                      
-                     if (input$kap_file_ext == "emf"){
-                       devEMF::emf(file, width = input$fig_width_pie, height =input$fig_height_pie, coordDPI = 300, emfPlus = F)
-                       print(obj.pie())
-                       dev.off()
+                     if (input$pie_file_ext == "emf"){
+                       if (input$type_pie == "Treemap"){
+                         devEMF::emf(file, width = input$fig_width_pie, height =input$fig_height_pie, coordDPI = 300, emfPlus = F)
+                         print(obj.pie())
+                         dev.off() 
+                       } else{
+                         devEMF::emf(file, width = input$fig_width_pie, height =input$fig_height_pie, coordDPI = 300, emfPlus = F)
+                         data <- out[, .SD]
+                         if (input$group_pie != "All"){
+                           data <- out[Group == out.label[variable == "Group" & val_label == input$group_pie, level]] 
+                         }
+                         
+                         data[, ClavienDindoGrade := factor(ifelse(ClavienDindoComplication01 == 0, "1", as.character(ClavienDindoGrade)))]
+                         df <- data[, .N, keyby = c("ClavienDindoComplication01", "ClavienDindoGrade")][, prop:= N/sum(N) * 100]
+                         
+                         df$ClavienDindoComplication01 <- ifelse(df$ClavienDindoComplication01 == 0, "No", "Yes")
+                         names(df)[4] <- "Clavien-Dindo complication(%)"
+                         par(mfrow= c(1, 2))
+                         df1 <- df[, lapply(.SD, sum), .SDcols = c("N","Clavien-Dindo complication(%)"), keyby = "ClavienDindoComplication01"]
+                         pie(df1$N, label = paste0(df1[["Clavien-Dindo complication(%)"]], "%"), col = gray.colors(nrow(df1)), init.angle = 90)
+                         legend("topright", legend = df1$ClavienDindoComplication01, fill = gray.colors(nrow(df1)))
+                         pie(df[-1]$N, label = paste0(df[-1][["Clavien-Dindo complication(%)"]], "%"), col = gray.colors(nrow(df[-1])), init.angle = 90)
+                         legend("topright", legend = df[-1]$ClavienDindoGrade, fill = gray.colors(nrow(df[-1])))
+                         dev.off() 
+                       }
+                       
                        
                      } else{
                        ggsave(file, obj.pie(), dpi = 300, units = "in", width = input$fig_width_pie, height =input$fig_height_pie)

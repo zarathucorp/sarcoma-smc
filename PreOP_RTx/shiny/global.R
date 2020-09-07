@@ -4,8 +4,8 @@ library(dplyr)
 #read data
 
 #setwd("/home/js/ShinyApps/LeeKW/sarcoma_preOP_RT")
-a <- excel_sheets("sarcoma data sheet SMC 20200811.xlsx") %>% 
-  lapply(function(x){read_excel("sarcoma data sheet SMC 20200811.xlsx",sheet=x,skip=2, na = "UK")})
+a <- excel_sheets("sarcoma data sheet SMC 20200907.xlsx") %>% 
+  lapply(function(x){read_excel("sarcoma data sheet SMC 20200907.xlsx",sheet=x,skip=2, na = "UK")})
 b <- a[[1]] %>% 
   left_join(a[[2]], by = "환자번호") %>% left_join(a[[3]], by = "환자번호") %>% left_join(a[[4]], by = "환자번호") %>%
   left_join(a[[5]], by = "환자번호") %>% left_join(a[[6]], by = "환자번호") %>% left_join(a[[7]], by = "환자번호")
@@ -117,12 +117,14 @@ out$Liposarcoma_postop <- as.integer((c[["병리결과\r\n\r\n0. WD Liposarcoma\
                                        grepl("liposarcoma|Liposarcoma", c[["Other \r\n\r\ncomment"]]))  
 
 #FNCLCC grade
-out$FNCLCC_grade <- as.factor(c[["FNCLCC grade\r\n\r\n1/2/3/UK"]])
+out$FNCLCC <- c[["FNCLCC grade\r\n\r\n1/2/3/UK\r\n\r\npathology reoport&최윤라교수님 판독"]]
+out$FNCLCC <- ifelse(out$FNCLCC == "UK", NA, out$FNCLCC)
 
 #Tumor Resection
 #R0/R1="0", R2="1", other=NA ("2"도 NA에 포함)
-out$Resection <- c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2: post OP 1주 CT에서 있을시 포함,debulking op\r\n2. Not available"]]
-out$Resection <- as.factor(ifelse(out$Resection=="2", NA, out$Resection))
+
+out$Resection <- as.integer(c[["Surgical margins\r\n\r\n0. R0/R1\r\n1. R2: post OP 1주 CT에서 있을시(r/o시 그 다음 f/u CT가지) ,debulking op\r\n2. Not available"]])
+out$Resection <- ifelse(out$Resection == 2, NA, out$Resection)
 
 #Combined Organ Resection
 # "colon resection" : Rt. + Lt. + rectum 
@@ -191,7 +193,7 @@ for (vname in names(c)[c(130:137, 139:141)]){
 varlist <- list(
   Base = c("Group", "Group1_23", "primaryTumor", "Age", "Sex", "BMI", "BMI_cat",  "DM", "HTN", "COPD", "CoronaryArteryDisease", "ChronicRenalDisease", "PrevAbdominalOp", "preOpChemo", 
            "Hb", "Hb_below9", "Hb_below10", "Albumin", "Albumin_below3", "PLT", "PLT_below50", "PLT_below100", "PT_INR", "PT_INR_over1.5", "TumorSize", "Liposarcoma_postop",
-           "FNCLCC_grade", "Resection", "num_resected_organ", grep("resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL", "preOP_Rtx_to_OP_day"),
+           "FNCLCC", "Resection", "num_resected_organ", grep("resection_", names(out), value = T), "opTime", "intraOpTransfusion", "EBL", "preOP_Rtx_to_OP_day"),
   Complication = c("ClavienDindoComplication01", "ClavienDindoComplication_wo_2", "ClavienDindoGrade", "postOpTransfusion", "ICUcare", "ReOP", "HospitalDay", "RTgray"),
   Event = c("Death", "recur_local"),
   Day = c("day_FU", "recur_day")
@@ -227,5 +229,4 @@ out.label[variable == "Resection", `:=`(var_label = "Resection", val_label = c("
 out.label[variable == "preOP_Rtx_to_OP_day", `:=`(var_label = "preOP RTx to OP duration")]
 out.label[variable == "ClavienDindoComplication_wo_2", `:=`(var_label = "Clavien-Dindo complication", val_label = c("1/2", "3a/3b/4/5"))]
 out.label[variable == "ClavienDindoComplication01", `:=`(var_label = "Clavien-Dindo complication (No/Yes)", val_label = c("No", "Yes"))]
-
 

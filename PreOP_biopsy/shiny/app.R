@@ -272,7 +272,7 @@ server <- function(input, output, session) {
   data.info <- reactive({
     out1 <- out[, .SD]
     out1[, (conti_vars) := lapply(.SD, function(x){as.numeric(as.vector(x))}), .SDcols = conti_vars]
-   
+    
     out.label1 <- out.label[, .SD]
     #out.label[, var_label := ref[out.label$variable, name.old]]
     
@@ -383,7 +383,7 @@ server <- function(input, output, session) {
     )
   })
   
-
+  
   
   out_tb1 <- callModule(tb1module2, "tb1", data = data, data_label = data.label, data_varStruct = reactive(varlist), nfactor.limit = nfactor.limit, showAllLevels = T)
   
@@ -403,7 +403,7 @@ server <- function(input, output, session) {
     return(out.tb1)
   })
   
-
+  
   
   datakm <- reactive({
     switch(input$data_kap, 
@@ -505,7 +505,7 @@ server <- function(input, output, session) {
       
     })
   
- 
+  
   datacox <- reactive({
     switch(input$data_cox, 
            "All" = out,
@@ -567,7 +567,7 @@ server <- function(input, output, session) {
     )  %>% formatStyle("sig", target = 'row',backgroundColor = styleEqual("**", 'yellow'))
   })
   
- 
+  
   output$acc_ttest <- renderDT({
     data <- out[, .SD]
     data$Rtx_tissue_expander[data$Rtx_total == 0] <- 0
@@ -588,7 +588,7 @@ server <- function(input, output, session) {
     epiR::epi.tests(tb)
     
   })
-
+  
   
 }
 
